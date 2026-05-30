@@ -142,6 +142,23 @@ Before implementation, make sure there is a written spec in the Linear ticket or
 
 Implementation should follow the accepted spec. If the implementation needs to diverge, update the ticket/spec with the reason before continuing.
 
+## Local Agent Skills
+
+The repository may contain reusable agent skills under `.agent/`.
+
+For non-trivial work, inspect and use applicable `.agent/*/SKILL.md` guidance before planning or implementation. Announce which local skills are being used and why.
+
+Useful local skills may include:
+
+- `spec-driven-development` for Linear/spec-first work.
+- `source-driven-development` for grounding implementation in current code and authoritative sources.
+- `incremental-implementation` for small, safe implementation steps.
+- `code-review-and-quality` for review and verification passes.
+- `git-workflow-and-versioning` for commits and branch hygiene.
+- `frontend-ui-engineering` for UI tickets.
+
+Do not force a skill when it does not apply. If a relevant skill is missing, unreadable, or conflicts with this `AGENTS.md`, state the issue and follow `AGENTS.md`.
+
 ## Linear Workflow
 
 The user already has a Linear team but no project. Use the existing team. Do not assume a Linear project exists.
