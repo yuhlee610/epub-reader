@@ -6,23 +6,33 @@ import (
 	"fmt"
 
 	"epub-reader/internal/library"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App owns the Wails-facing application state.
 type App struct {
-	ctx      context.Context
-	store    *library.Store
-	storeErr error
+	ctx          context.Context
+	store        *library.Store
+	storeErr     error
+	openEPUBFile func(context.Context) (string, error)
+}
+
+// ImportEPUBResult describes the UI-facing result of an import attempt.
+type ImportEPUBResult struct {
+	Book      library.BookMetadata `json:"book"`
+	Duplicate bool                 `json:"duplicate"`
+	Canceled  bool                 `json:"canceled"`
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	store, err := library.NewStore("")
 	if err != nil {
-		return &App{storeErr: err}
+		return &App{storeErr: err, openEPUBFile: openEPUBFileDialog}
 	}
 
-	return &App{store: store}
+	return &App{store: store, openEPUBFile: openEPUBFileDialog}
 }
 
 // startup is called when the app starts. The context is saved
@@ -44,6 +54,50 @@ func (a *App) GetStorageInfo() (library.StorageInfo, error) {
 	}
 
 	return store.Info(), nil
+}
+
+// ImportEPUB opens a native picker and imports the selected EPUB into storage.
+func (a *App) ImportEPUB() (ImportEPUBResult, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return ImportEPUBResult{}, err
+	}
+	if a.ctx == nil {
+		return ImportEPUBResult{}, errors.New("application is not ready")
+	}
+	if a.openEPUBFile == nil {
+		return ImportEPUBResult{}, errors.New("epub file picker is not configured")
+	}
+
+	selection, err := a.openEPUBFile(a.ctx)
+	if err != nil {
+		return ImportEPUBResult{}, fmt.Errorf("open epub picker: %w", err)
+	}
+	if selection == "" {
+		return ImportEPUBResult{Canceled: true}, nil
+	}
+
+	result, err := store.ImportEPUBFromPath(selection)
+	if err != nil {
+		return ImportEPUBResult{}, err
+	}
+
+	return ImportEPUBResult{
+		Book:      result.Book,
+		Duplicate: result.Duplicate,
+	}, nil
+}
+
+// openEPUBFileDialog uses the Wails runtime native picker for EPUB files.
+func openEPUBFileDialog(ctx context.Context) (string, error) {
+	// Wails v2 exposes native file dialogs through the Go runtime:
+	// https://pkg.go.dev/github.com/wailsapp/wails/v2@v2.12.0/pkg/runtime#OpenFileDialog
+	return runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
+		Title: "Import EPUB",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "EPUB files (*.epub)", Pattern: "*.epub"},
+		},
+	})
 }
 
 // ManagedBookPath returns where an imported EPUB should be copied.

@@ -18,6 +18,10 @@ export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
 
+export function ImportEPUB() {
+  return window['go']['main']['App']['ImportEPUB']();
+}
+
 export function ListBooks() {
   return window['go']['main']['App']['ListBooks']();
 }

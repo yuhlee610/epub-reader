@@ -71,6 +71,7 @@ Use these commands from the repository root unless noted otherwise:
 
 - `wails dev`: run the desktop app in live development mode.
 - `wails build`: build a redistributable desktop app.
+- `wails build -m -skipbindings -skipembedcreate`: build after `go vet` and binding generation are already current if Wails static analysis walks `frontend/node_modules`.
 - `go test ./...`: run Go tests.
 - `go fmt ./...`: format Go code.
 - `go vet ./...`: run Go static checks when useful.
