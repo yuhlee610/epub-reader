@@ -10,6 +10,10 @@ export function GetBook(arg1) {
   return window['go']['main']['App']['GetBook'](arg1);
 }
 
+export function GetReaderBook(arg1) {
+  return window['go']['main']['App']['GetReaderBook'](arg1);
+}
+
 export function GetStorageInfo() {
   return window['go']['main']['App']['GetStorageInfo']();
 }
@@ -32,4 +36,8 @@ export function ManagedBookPath(arg1, arg2) {
 
 export function SaveBookMetadata(arg1) {
   return window['go']['main']['App']['SaveBookMetadata'](arg1);
+}
+
+export function SaveReadingProgress(arg1, arg2) {
+  return window['go']['main']['App']['SaveReadingProgress'](arg1, arg2);
 }

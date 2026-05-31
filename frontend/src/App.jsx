@@ -2,11 +2,35 @@ import './App.css';
 import {LibraryContent} from './components/LibraryContent';
 import {LibraryToolbar} from './components/LibraryToolbar';
 import {Notification} from './components/Notification';
+import {ReaderView} from './components/ReaderView';
 import {useLibrary} from './hooks/useLibrary';
+import {useReader} from './hooks/useReader';
 
 // App composes the library screen while hooks/components own workflow details.
 function App() {
   const library = useLibrary();
+  const reader = useReader();
+
+  if (reader.readerBook || reader.isReaderLoading) {
+    return (
+      <>
+        <Notification message="" error={reader.readerError} />
+        <ReaderView
+          chapter={reader.currentChapter}
+          chapterIndex={reader.currentChapterIndex}
+          isLoading={reader.isReaderLoading}
+          onClose={() => {
+            reader.closeReader();
+            library.loadBooks();
+          }}
+          onNext={reader.goToNextChapter}
+          onPrevious={reader.goToPreviousChapter}
+          onSelectChapter={reader.goToChapter}
+          readerBook={reader.readerBook}
+        />
+      </>
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -17,7 +41,7 @@ function App() {
         query={library.query}
       />
 
-      <Notification message={library.message} error={library.error} />
+      <Notification message={library.message} error={library.error || reader.readerError} />
 
       <LibraryContent
         activeBook={library.activeBook}
@@ -28,6 +52,7 @@ function App() {
         onCloseBook={() => library.setActiveBook(null)}
         onImport={library.importBook}
         onOpenBook={library.openBook}
+        onReadBook={reader.openReader}
         onRemoveBook={library.removeBook}
         visibleBooks={library.visibleBooks}
       />

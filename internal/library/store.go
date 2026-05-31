@@ -169,6 +169,39 @@ func (s *Store) DeleteBook(id string) error {
 	return s.writeLibrary(file)
 }
 
+// UpdateReadingProgress stores the user's last known chapter location.
+func (s *Store) UpdateReadingProgress(id string, progress ReadingProgress) (BookMetadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := s.readLibrary()
+	if err != nil {
+		return BookMetadata{}, err
+	}
+
+	for i := range file.Books {
+		if file.Books[i].ID != strings.TrimSpace(id) {
+			continue
+		}
+
+		progress.ChapterHref = strings.TrimSpace(progress.ChapterHref)
+		progress.Location = strings.TrimSpace(progress.Location)
+		if progress.ChapterIndex < 0 {
+			progress.ChapterIndex = 0
+		}
+		progress.UpdatedAt = s.timeProvider()
+
+		file.Books[i].Progress = progress
+		if err := s.writeLibrary(file); err != nil {
+			return BookMetadata{}, err
+		}
+
+		return file.Books[i], nil
+	}
+
+	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
+}
+
 // prepareBook normalizes and validates metadata before it is written to disk.
 func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMetadata, error) {
 	var err error

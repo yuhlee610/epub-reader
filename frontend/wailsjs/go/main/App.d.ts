@@ -7,6 +7,8 @@ export function DeleteBookMetadata(arg1:string):Promise<void>;
 
 export function GetBook(arg1:string):Promise<library.BookMetadata>;
 
+export function GetReaderBook(arg1:string):Promise<library.ReaderBook>;
+
 export function GetStorageInfo():Promise<library.StorageInfo>;
 
 export function Greet(arg1:string):Promise<string>;
@@ -18,3 +20,5 @@ export function ListBooks():Promise<Array<library.BookMetadata>>;
 export function ManagedBookPath(arg1:string,arg2:string):Promise<string>;
 
 export function SaveBookMetadata(arg1:library.BookMetadata):Promise<library.BookMetadata>;
+
+export function SaveReadingProgress(arg1:string,arg2:library.ReadingProgress):Promise<library.BookMetadata>;

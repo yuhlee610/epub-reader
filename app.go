@@ -130,6 +130,26 @@ func (a *App) GetBook(id string) (library.BookMetadata, error) {
 	return store.GetBook(id)
 }
 
+// GetReaderBook returns imported EPUB content for the reader view.
+func (a *App) GetReaderBook(id string) (library.ReaderBook, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.ReaderBook{}, err
+	}
+
+	return store.LoadReaderBook(id)
+}
+
+// SaveReadingProgress persists the reader's last opened chapter.
+func (a *App) SaveReadingProgress(id string, progress library.ReadingProgress) (library.BookMetadata, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.BookMetadata{}, err
+	}
+
+	return store.UpdateReadingProgress(id, progress)
+}
+
 // SaveBookMetadata creates or updates one book metadata record.
 func (a *App) SaveBookMetadata(book library.BookMetadata) (library.BookMetadata, error) {
 	store, err := a.libraryStore()

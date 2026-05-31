@@ -157,6 +157,7 @@ export function useLibrary() {
     openBook,
     query,
     removeBook,
+    loadBooks,
     setActiveBook,
     setQuery,
     visibleBooks,

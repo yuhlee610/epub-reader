@@ -11,6 +11,7 @@ export function LibraryContent({
   onCloseBook,
   onImport,
   onOpenBook,
+  onReadBook,
   onRemoveBook,
   visibleBooks,
 }) {
@@ -60,7 +61,7 @@ export function LibraryContent({
           book={activeBook}
           isRemoving={isRemoving}
           onClose={onCloseBook}
-          onOpen={onOpenBook}
+          onOpen={onReadBook}
           onRemove={onRemoveBook}
         />
       </div>

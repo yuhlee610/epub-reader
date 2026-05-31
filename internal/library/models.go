@@ -34,3 +34,18 @@ type PromptConfig struct {
 	CustomPrompt string    `json:"customPrompt,omitempty"`
 	UpdatedAt    time.Time `json:"updatedAt,omitempty"`
 }
+
+// ReaderBook is the UI-facing payload for opening one imported EPUB.
+type ReaderBook struct {
+	Book                BookMetadata    `json:"book"`
+	Chapters            []ReaderChapter `json:"chapters"`
+	CurrentChapterIndex int             `json:"currentChapterIndex"`
+}
+
+// ReaderChapter is one readable spine item extracted from an EPUB.
+type ReaderChapter struct {
+	Index    int    `json:"index"`
+	Href     string `json:"href"`
+	Title    string `json:"title"`
+	BodyHTML string `json:"bodyHtml"`
+}
