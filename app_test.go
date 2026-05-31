@@ -69,6 +69,34 @@ func TestImportEPUBHandlesDuplicateSelection(t *testing.T) {
 	}
 }
 
+// TestDeleteBookMetadataRemovesLibraryRecord verifies the Wails-facing delete
+// method removes persisted metadata without requiring frontend state tricks.
+func TestDeleteBookMetadataRemovesLibraryRecord(t *testing.T) {
+	source := writeAppTestEPUB(t, t.TempDir(), "cradle.epub", "Cradle", "Will Wight")
+	app := newTestApp(t, func(context.Context) (string, error) {
+		return source, nil
+	})
+
+	result, err := app.ImportEPUB()
+	if err != nil {
+		t.Fatalf("ImportEPUB() error = %v", err)
+	}
+	if err := app.DeleteBookMetadata(result.Book.ID); err != nil {
+		t.Fatalf("DeleteBookMetadata() error = %v", err)
+	}
+
+	books, err := app.ListBooks()
+	if err != nil {
+		t.Fatalf("ListBooks() error = %v", err)
+	}
+	if len(books) != 0 {
+		t.Fatalf("book count = %d, want 0 after delete", len(books))
+	}
+	if _, err := os.Stat(result.Book.FilePath); err != nil {
+		t.Fatalf("managed copy should remain after metadata delete: %v", err)
+	}
+}
+
 // TestImportEPUBHandlesCanceledPicker verifies cancellation is represented as
 // a non-error result for the frontend.
 func TestImportEPUBHandlesCanceledPicker(t *testing.T) {
