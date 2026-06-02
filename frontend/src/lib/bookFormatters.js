@@ -12,11 +12,25 @@ export function formatImportedAt(value) {
 
 // progressLabel formats the currently available persisted reading progress.
 export function progressLabel(book) {
-  if (!book?.progress?.chapterIndex) {
+  const percent = progressPercent(book?.progress);
+  if (percent <= 0) {
     return '0%';
   }
 
-  return `${Math.max(0, book.progress.chapterIndex)}%`;
+  return `${percent}%`;
+}
+
+function progressPercent(progress) {
+  if (!progress) {
+    return 0;
+  }
+
+  const match = /(?:^|;)percent:(\d+)(?:;|$)/.exec(progress.location || '');
+  if (match) {
+    return Math.min(100, Math.max(0, Number(match[1])));
+  }
+
+  return Math.min(100, Math.max(0, progress.chapterIndex || 0));
 }
 
 // coverTitle keeps generated placeholder covers readable for books without art.

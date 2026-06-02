@@ -498,8 +498,13 @@
     display: grid;
     grid-template-columns: 306px minmax(0, 1fr);
     min-height: 100vh;
+    overflow: hidden;
     background: #ffffff;
     color: #242424;
+}
+
+.reader-shell.is-toc-collapsed {
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .reader-sidebar {
@@ -682,35 +687,84 @@
     position: relative;
     display: grid;
     grid-template-rows: 40px minmax(0, 1fr) 42px;
+    min-width: 0;
     height: 100vh;
     overflow: hidden;
     background: #ffffff;
 }
 
 .reader-topline {
+    --wails-draggable: drag;
     display: flex;
     align-items: center;
-    padding-left: 48px;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 0 10px 0 48px;
     color: #888888;
     font-size: 0.78rem;
     font-weight: 700;
 }
 
+.reader-topline > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-stage-back {
+    --wails-draggable: no-drag;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #333333;
+    cursor: pointer;
+}
+
+.reader-stage-back:hover {
+    background: #e4e4e4;
+}
+
+.reader-window-actions {
+    --wails-draggable: no-drag;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reader-window-actions .window-tool {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 999px;
+    color: #2f2f2f;
+}
+
 .reader-page {
+    width: 100%;
     min-height: 0;
-    overflow: auto;
+    box-sizing: border-box;
+    overflow: hidden;
     padding: 48px 72px 34px;
+    contain: layout paint;
+    scroll-behavior: smooth;
 }
 
 .reader-chapter-content {
-    max-width: 1120px;
-    margin: 0 auto;
-    column-count: 2;
-    column-gap: 92px;
+    min-width: 100%;
+    height: 100%;
+    column-fill: auto;
+    column-gap: var(--reader-column-gap);
+    column-width: var(--reader-column-width);
     color: #222222;
     font-family: Georgia, "Times New Roman", serif;
     font-size: 1.16rem;
     line-height: 1.22;
+    overflow: visible;
 }
 
 .reader-chapter-content h1,
@@ -739,7 +793,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 24px;
+    gap: 16px;
     padding: 0 48px;
     color: #9a9a9a;
     font-size: 0.72rem;
@@ -803,12 +857,15 @@
         display: none;
     }
 
+    .reader-topline {
+        padding-left: 10px;
+    }
+
     .reader-page {
         padding: 24px 22px 28px;
     }
 
     .reader-chapter-content {
-        column-count: 1;
         font-size: 1rem;
     }
 }

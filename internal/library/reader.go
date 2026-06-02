@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -34,7 +36,7 @@ func (s *Store) LoadReaderBook(id string) (ReaderBook, error) {
 		return ReaderBook{}, err
 	}
 
-	chapters, err := readEPUBChapters(book.FilePath)
+	chapters, err := readEPUBChapters(book.FilePath, book.Title)
 	if err != nil {
 		return ReaderBook{}, err
 	}
@@ -50,7 +52,7 @@ func (s *Store) LoadReaderBook(id string) (ReaderBook, error) {
 }
 
 // readEPUBChapters follows the EPUB package spine and extracts readable XHTML.
-func readEPUBChapters(epubPath string) ([]ReaderChapter, error) {
+func readEPUBChapters(epubPath, bookTitle string) ([]ReaderChapter, error) {
 	reader, err := zip.OpenReader(epubPath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: open zip container: %v", ErrInvalidEPUB, err)
@@ -105,9 +107,7 @@ func readEPUBChapters(epubPath string) ([]ReaderChapter, error) {
 		if strings.TrimSpace(bodyHTML) == "" {
 			continue
 		}
-		if title == "" {
-			title = titleFromChapterPath(chapterPath, len(chapters))
-		}
+		title = chapterDisplayTitle(title, bookTitle, chapterPath, len(chapters))
 
 		chapters = append(chapters, ReaderChapter{
 			Index:    len(chapters),
@@ -163,6 +163,9 @@ func resolveEPUBPath(baseDir, href string) (string, error) {
 	href = strings.TrimSpace(strings.Split(href, "#")[0])
 	if href == "" {
 		return "", fmt.Errorf("%w: empty chapter href", ErrInvalidEPUB)
+	}
+	if decoded, err := url.PathUnescape(href); err == nil {
+		href = decoded
 	}
 
 	resolved := path.Clean(path.Join(baseDir, filepath.ToSlash(href)))
@@ -310,12 +313,53 @@ func cleanReaderText(value string) string {
 
 func titleFromChapterPath(chapterPath string, index int) string {
 	name := strings.TrimSuffix(path.Base(chapterPath), path.Ext(chapterPath))
-	name = strings.Trim(strings.ReplaceAll(name, "_", " "), " -")
+	lowerName := strings.ToLower(name)
+	if lowerName == "cover" || lowerName == "titlepage" || lowerName == "title-page" {
+		return "Cover"
+	}
+	if lowerName == "toc" || lowerName == "contents" || lowerName == "nav" {
+		return "Contents"
+	}
+	if number, ok := trailingNumber(lowerName); ok {
+		return fmt.Sprintf("Chapter %d", number)
+	}
+
+	name = strings.Trim(strings.NewReplacer("_", " ", "-", " ").Replace(name), " ")
 	if name == "" {
 		return fmt.Sprintf("Chapter %d", index+1)
 	}
 
 	return name
+}
+
+func chapterDisplayTitle(title, bookTitle, chapterPath string, index int) string {
+	title = cleanReaderText(title)
+	if title == "" || sameReaderTitle(title, bookTitle) {
+		return titleFromChapterPath(chapterPath, index)
+	}
+
+	return title
+}
+
+func sameReaderTitle(a, b string) bool {
+	shortTitle := strings.ToLower(cleanReaderText(a))
+	fullTitle := strings.ToLower(cleanReaderText(b))
+	return shortTitle == fullTitle ||
+		strings.HasPrefix(fullTitle, shortTitle+" ") ||
+		strings.HasPrefix(fullTitle, shortTitle+"(")
+}
+
+func trailingNumber(value string) (int, bool) {
+	end := len(value)
+	start := end
+	for start > 0 && value[start-1] >= '0' && value[start-1] <= '9' {
+		start--
+	}
+	if start == end {
+		return 0, false
+	}
+	number, err := strconv.Atoi(value[start:end])
+	return number, err == nil
 }
 
 func currentChapterIndex(progress ReadingProgress, chapters []ReaderChapter) int {

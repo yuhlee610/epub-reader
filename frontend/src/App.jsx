@@ -18,12 +18,14 @@ function App() {
         <ReaderView
           chapter={reader.currentChapter}
           chapterIndex={reader.currentChapterIndex}
+          initialPageIndex={reader.currentPageIndex}
           isLoading={reader.isReaderLoading}
-          onClose={() => {
-            reader.closeReader();
+          onClose={async () => {
+            await reader.closeReader();
             library.loadBooks();
           }}
           onNext={reader.goToNextChapter}
+          onPageChange={reader.saveCurrentPage}
           onPrevious={reader.goToPreviousChapter}
           onSelectChapter={reader.goToChapter}
           readerBook={reader.readerBook}

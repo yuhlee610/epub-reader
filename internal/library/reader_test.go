@@ -68,6 +68,64 @@ func TestLoadReaderBookUsesPersistedProgress(t *testing.T) {
 	}
 }
 
+// TestChapterDisplayTitleFallsBackFromBookTitle verifies TOC labels avoid
+// repeating the book title for every spine item.
+func TestChapterDisplayTitleFallsBackFromBookTitle(t *testing.T) {
+	tests := []struct {
+		name        string
+		title       string
+		bookTitle   string
+		chapterPath string
+		index       int
+		want        string
+	}{
+		{
+			name:        "cover",
+			title:       "Soulsmith",
+			bookTitle:   "Soulsmith",
+			chapterPath: "OPS/cover.xhtml",
+			want:        "Cover",
+		},
+		{
+			name:        "contents",
+			title:       "Soulsmith",
+			bookTitle:   "Soulsmith",
+			chapterPath: "OPS/nav.xhtml",
+			want:        "Contents",
+		},
+		{
+			name:        "numbered chapter",
+			title:       "Soulsmith",
+			bookTitle:   "Soulsmith",
+			chapterPath: "OPS/chapter-7.xhtml",
+			want:        "Chapter 7",
+		},
+		{
+			name:        "real title",
+			title:       "The Trial",
+			bookTitle:   "Soulsmith",
+			chapterPath: "OPS/chapter-7.xhtml",
+			want:        "The Trial",
+		},
+		{
+			name:        "short book title",
+			title:       "Soulsmith",
+			bookTitle:   "Soulsmith (Cradle Book 2)",
+			chapterPath: "OPS/chapter-12.xhtml",
+			want:        "Chapter 12",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := chapterDisplayTitle(tt.title, tt.bookTitle, tt.chapterPath, tt.index)
+			if got != tt.want {
+				t.Fatalf("chapterDisplayTitle() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestLoadReaderBookReportsMalformedManagedCopy verifies reader errors are
 // surfaced as invalid EPUB failures.
 func TestLoadReaderBookReportsMalformedManagedCopy(t *testing.T) {
