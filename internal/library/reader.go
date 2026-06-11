@@ -15,18 +15,40 @@ import (
 )
 
 type packageManifestItem struct {
-	ID        string `xml:"id,attr"`
-	Href      string `xml:"href,attr"`
-	MediaType string `xml:"media-type,attr"`
+	ID         string `xml:"id,attr"`
+	Href       string `xml:"href,attr"`
+	MediaType  string `xml:"media-type,attr"`
+	Properties string `xml:"properties,attr"`
 }
 
 type packageSpineItem struct {
 	IDRef string `xml:"idref,attr"`
 }
 
+type packageSpine struct {
+	TOC   string             `xml:"toc,attr"`
+	Items []packageSpineItem `xml:"itemref"`
+}
+
 type readerPackageXML struct {
 	Manifest []packageManifestItem `xml:"manifest>item"`
-	Spine    []packageSpineItem    `xml:"spine>itemref"`
+	Spine    packageSpine          `xml:"spine"`
+}
+
+type ncxXML struct {
+	NavMap struct {
+		Points []ncxNavPoint `xml:"navPoint"`
+	} `xml:"navMap"`
+}
+
+type ncxNavPoint struct {
+	Label struct {
+		Text string `xml:"text"`
+	} `xml:"navLabel"`
+	Content struct {
+		Src string `xml:"src,attr"`
+	} `xml:"content"`
+	Children []ncxNavPoint `xml:"navPoint"`
 }
 
 // LoadReaderBook opens the managed EPUB and returns readable chapter content.
@@ -79,13 +101,14 @@ func readEPUBChapters(epubPath, bookTitle string) ([]ReaderChapter, error) {
 	}
 
 	manifestByID := mapManifestByID(pkg.Manifest)
-	chapters := make([]ReaderChapter, 0, len(pkg.Spine))
+	chapters := make([]ReaderChapter, 0, len(pkg.Spine.Items))
 	baseDir := path.Dir(packagePath)
 	if baseDir == "." {
 		baseDir = ""
 	}
+	tocTitles := readTOCTitles(&reader.Reader, baseDir, pkg, manifestByID)
 
-	for _, itemRef := range pkg.Spine {
+	for _, itemRef := range pkg.Spine.Items {
 		item, ok := manifestByID[itemRef.IDRef]
 		if !ok || !isReadableSpineItem(item) {
 			continue
@@ -107,6 +130,9 @@ func readEPUBChapters(epubPath, bookTitle string) ([]ReaderChapter, error) {
 		if strings.TrimSpace(bodyHTML) == "" {
 			continue
 		}
+		if tocTitle := tocTitles[chapterPath]; tocTitle != "" {
+			title = tocTitle
+		}
 		title = chapterDisplayTitle(title, bookTitle, chapterPath, len(chapters))
 
 		chapters = append(chapters, ReaderChapter{
@@ -118,6 +144,204 @@ func readEPUBChapters(epubPath, bookTitle string) ([]ReaderChapter, error) {
 	}
 
 	return chapters, nil
+}
+
+// readTOCTitles loads EPUB 3 nav or EPUB 2 NCX labels and indexes them by href.
+func readTOCTitles(
+	reader *zip.Reader,
+	baseDir string,
+	pkg readerPackageXML,
+	manifestByID map[string]packageManifestItem,
+) map[string]string {
+	if titles := readNavigationTitles(reader, baseDir, pkg.Manifest); len(titles) > 0 {
+		return titles
+	}
+
+	return readNCXTitles(reader, baseDir, pkg, manifestByID)
+}
+
+// readNavigationTitles extracts labels from an EPUB 3 navigation document.
+func readNavigationTitles(
+	reader *zip.Reader,
+	baseDir string,
+	items []packageManifestItem,
+) map[string]string {
+	for _, item := range items {
+		if !manifestItemHasProperty(item, "nav") {
+			continue
+		}
+
+		navPath, err := resolveEPUBPath(baseDir, item.Href)
+		if err != nil {
+			continue
+		}
+		data, err := readZipFile(reader, navPath)
+		if err != nil {
+			continue
+		}
+
+		return parseNavigationTitles(data, path.Dir(navPath))
+	}
+
+	return map[string]string{}
+}
+
+// parseNavigationTitles returns href labels from the document's TOC nav.
+func parseNavigationTitles(data []byte, baseDir string) map[string]string {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.Strict = false
+
+	titles := map[string]string{}
+	var navDepth int
+	var anchorDepth int
+	var anchorHref string
+	var anchorLabel strings.Builder
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			break
+		}
+
+		switch node := token.(type) {
+		case xml.StartElement:
+			name := strings.ToLower(node.Name.Local)
+			if navDepth == 0 {
+				if name == "nav" && elementHasType(node, "toc") {
+					navDepth = 1
+				}
+				continue
+			}
+
+			navDepth++
+			if name == "a" && anchorDepth == 0 {
+				anchorHref = attrValue(node, "href")
+				anchorLabel.Reset()
+				anchorDepth = 1
+				continue
+			}
+			if anchorDepth > 0 {
+				anchorDepth++
+			}
+		case xml.EndElement:
+			if navDepth == 0 {
+				continue
+			}
+			if anchorDepth > 0 {
+				anchorDepth--
+				if anchorDepth == 0 {
+					addTOCTitle(titles, baseDir, anchorHref, anchorLabel.String())
+					anchorHref = ""
+				}
+			}
+			navDepth--
+		case xml.CharData:
+			if anchorDepth > 0 {
+				anchorLabel.Write([]byte(node))
+			}
+		}
+	}
+
+	return titles
+}
+
+// readNCXTitles extracts labels from an EPUB 2 NCX table of contents.
+func readNCXTitles(
+	reader *zip.Reader,
+	baseDir string,
+	pkg readerPackageXML,
+	manifestByID map[string]packageManifestItem,
+) map[string]string {
+	item, ok := manifestByID[strings.TrimSpace(pkg.Spine.TOC)]
+	if !ok {
+		for _, candidate := range pkg.Manifest {
+			if strings.EqualFold(strings.TrimSpace(candidate.MediaType), "application/x-dtbncx+xml") {
+				item = candidate
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		return map[string]string{}
+	}
+
+	ncxPath, err := resolveEPUBPath(baseDir, item.Href)
+	if err != nil {
+		return map[string]string{}
+	}
+	data, err := readZipFile(reader, ncxPath)
+	if err != nil {
+		return map[string]string{}
+	}
+
+	var ncx ncxXML
+	if err := xml.Unmarshal(data, &ncx); err != nil {
+		return map[string]string{}
+	}
+
+	titles := map[string]string{}
+	addNCXNavPoints(titles, path.Dir(ncxPath), ncx.NavMap.Points)
+	return titles
+}
+
+// addNCXNavPoints flattens nested NCX points into the MVP's one-level TOC.
+func addNCXNavPoints(titles map[string]string, baseDir string, points []ncxNavPoint) {
+	for _, point := range points {
+		addTOCTitle(titles, baseDir, point.Content.Src, point.Label.Text)
+		addNCXNavPoints(titles, baseDir, point.Children)
+	}
+}
+
+// addTOCTitle stores the first non-empty label for a normalized EPUB href.
+func addTOCTitle(titles map[string]string, baseDir, href, label string) {
+	label = cleanReaderText(label)
+	if label == "" {
+		return
+	}
+
+	resolved, err := resolveEPUBPath(baseDir, href)
+	if err != nil {
+		return
+	}
+	if _, exists := titles[resolved]; !exists {
+		titles[resolved] = label
+	}
+}
+
+func manifestItemHasProperty(item packageManifestItem, property string) bool {
+	for _, value := range strings.Fields(strings.ToLower(item.Properties)) {
+		if value == property {
+			return true
+		}
+	}
+
+	return false
+}
+
+func elementHasType(node xml.StartElement, value string) bool {
+	for _, attr := range node.Attr {
+		if strings.ToLower(attr.Name.Local) != "type" {
+			continue
+		}
+		for _, token := range strings.Fields(strings.ToLower(attr.Value)) {
+			if token == value || strings.TrimPrefix(token, "epub:") == value {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func attrValue(node xml.StartElement, name string) string {
+	for _, attr := range node.Attr {
+		if strings.EqualFold(attr.Name.Local, name) {
+			return attr.Value
+		}
+	}
+
+	return ""
 }
 
 // packageDocumentPath reads META-INF/container.xml and returns the OPF path.

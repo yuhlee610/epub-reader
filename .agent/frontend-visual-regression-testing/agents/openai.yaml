@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Visual Regression Testing"
+  short_description: "Test UI flows with screenshots, frame sampling, and cleanup."
+  default_prompt: "Use this skill to verify a frontend flow visually, especially reader navigation and fast transition flashes."

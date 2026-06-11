@@ -5,6 +5,7 @@ import {
 } from '../../wailsjs/go/main/App';
 
 const READER_ERROR_TIMEOUT_MS = 6000;
+const LAST_PAGE_INDEX = Number.MAX_SAFE_INTEGER;
 
 // useReader owns EPUB loading, chapter navigation, and progress persistence.
 export function useReader() {
@@ -13,6 +14,8 @@ export function useReader() {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [isReaderLoading, setIsReaderLoading] = useState(false);
   const [readerError, setReaderError] = useState('');
+  const readerBookRef = useRef(null);
+  const currentChapterIndexRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
 
   async function openReader(book) {
@@ -21,8 +24,13 @@ export function useReader() {
 
     try {
       const nextReaderBook = await GetReaderBook(book.id);
-      const nextChapterIndex = nextReaderBook.currentChapterIndex ?? 0;
+      const nextChapterIndex = clampChapterIndex(
+        nextReaderBook.currentChapterIndex ?? 0,
+        nextReaderBook.chapters?.length ?? 0,
+      );
 
+      readerBookRef.current = nextReaderBook;
+      currentChapterIndexRef.current = nextChapterIndex;
       setReaderBook(nextReaderBook);
       setCurrentChapterIndex(nextChapterIndex);
       setCurrentPageIndex(progressPageIndex(nextReaderBook, nextChapterIndex));
@@ -37,46 +45,90 @@ export function useReader() {
     await saveQueueRef.current.catch(() => undefined);
 
     setReaderBook(null);
+    readerBookRef.current = null;
+    currentChapterIndexRef.current = 0;
     setCurrentChapterIndex(0);
     setCurrentPageIndex(0);
     setReaderError('');
   }
 
-  async function goToChapter(index, pageIndex = 0, percent = null) {
-    if (!readerBook) {
+  async function goToChapter(index, pageIndex = 0, percent = null, options = {}) {
+    const currentReaderBook = readerBookRef.current;
+    if (!currentReaderBook) {
       return;
     }
 
-    const nextIndex = clampChapterIndex(index, readerBook.chapters.length);
+    const nextIndex = clampChapterIndex(index, currentReaderBook.chapters?.length ?? 0);
+    const nextPageIndex = Math.max(0, pageIndex);
 
+    currentChapterIndexRef.current = nextIndex;
     setCurrentChapterIndex(nextIndex);
-    setCurrentPageIndex(pageIndex);
+    setCurrentPageIndex(nextPageIndex);
 
-    await persistProgress(nextIndex, pageIndex, percent);
+    if (!options.deferProgress) {
+      await persistProgress(currentReaderBook, nextIndex, nextPageIndex, percent);
+    }
   }
 
-  async function saveCurrentPage(pageIndex, percent = null) {
-    if (!readerBook) {
+  async function saveCurrentPage(pageIndex, percent = null, source = {}) {
+    const currentReaderBook = readerBookRef.current;
+    if (!currentReaderBook) {
       return;
     }
 
-    setCurrentPageIndex(pageIndex);
-    await persistProgress(currentChapterIndex, pageIndex, percent);
+    const sourceChapterIndex = Number.isInteger(source.chapterIndex)
+      ? clampChapterIndex(source.chapterIndex, currentReaderBook.chapters?.length ?? 0)
+      : currentChapterIndexRef.current;
+    const sourceChapter = currentReaderBook.chapters?.[sourceChapterIndex];
+    if (
+      !sourceChapter ||
+      sourceChapterIndex !== currentChapterIndexRef.current ||
+      (source.chapterHref && source.chapterHref !== sourceChapter.href)
+    ) {
+      return;
+    }
+
+    const nextPageIndex = Math.max(0, pageIndex);
+
+    await persistProgress(
+      currentReaderBook,
+      sourceChapterIndex,
+      nextPageIndex,
+      percent,
+    );
   }
 
-  async function persistProgress(chapterIndex, pageIndex, percent) {
-    const chapter = readerBook.chapters[chapterIndex];
+  async function persistProgress(currentReaderBook, chapterIndex, pageIndex, percent) {
+    if (!currentReaderBook?.book?.id) {
+      return;
+    }
+
+    const chapter = currentReaderBook.chapters?.[chapterIndex];
+    if (!chapter) {
+      return;
+    }
+
+    const bookID = currentReaderBook.book.id;
+    const chapterHref = chapter.href;
+    const location = pageLocation(pageIndex, percent);
 
     saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(async () => {
-      const nextBook = await SaveReadingProgress(readerBook.book.id, {
-        chapterHref: chapter.href,
+      const nextBook = await SaveReadingProgress(bookID, {
+        chapterHref,
         chapterIndex,
-        location: pageLocation(pageIndex, percent),
+        location,
       });
-      setReaderBook((current) => current && {
-        ...current,
-        book: nextBook,
-        currentChapterIndex: chapterIndex,
+      setReaderBook((current) => {
+        if (!current || current.book.id !== bookID) {
+          return current;
+        }
+
+        const nextReaderBook = {
+          ...current,
+          book: nextBook,
+        };
+        readerBookRef.current = nextReaderBook;
+        return nextReaderBook;
       });
     });
 
@@ -88,12 +140,18 @@ export function useReader() {
   }
 
   function goToNextChapter() {
-    goToChapter(currentChapterIndex + 1);
+    goToChapter(currentChapterIndexRef.current + 1);
   }
 
   function goToPreviousChapter() {
-    goToChapter(currentChapterIndex - 1);
+    goToChapter(currentChapterIndexRef.current - 1, LAST_PAGE_INDEX, null, {
+      deferProgress: true,
+    });
   }
+
+  useEffect(() => {
+    currentChapterIndexRef.current = currentChapterIndex;
+  }, [currentChapterIndex]);
 
   useEffect(() => {
     if (!readerError) {

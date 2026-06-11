@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {
   Bookmark,
   ChevronLeft,
@@ -22,6 +22,8 @@ import {
 } from '../../wailsjs/runtime/runtime';
 import {coverTitle} from '../lib/bookFormatters';
 
+const LAST_PAGE_REQUEST_THRESHOLD = Number.MAX_SAFE_INTEGER / 2;
+
 export function ReaderView({
   chapter,
   chapterIndex,
@@ -36,17 +38,36 @@ export function ReaderView({
 }) {
   const contentRef = useRef(null);
   const pageRef = useRef(null);
+  const lastMeasuredPageCountRef = useRef(null);
+  const stablePageMeasureCountRef = useRef(0);
+  const positioningTimeoutRef = useRef(null);
+  const requestedPageIndexRef = useRef(0);
   const savedProgressRef = useRef('');
   const [contentWidth, setContentWidth] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageStep, setPageStep] = useState(1);
   const [isTocOpen, setIsTocOpen] = useState(true);
+  const [isPageContentHidden, setIsPageContentHidden] = useState(true);
+  const [isPagePositioning, setIsPagePositioning] = useState(true);
+  const [measuredChapterHref, setMeasuredChapterHref] = useState('');
   const chapterCount = readerBook?.chapters?.length ?? 0;
 
-  useEffect(() => {
-    setPageIndex(Math.max(0, initialPageIndex || 0));
-  }, [chapter?.href, initialPageIndex]);
+  useLayoutEffect(() => {
+    window.clearTimeout(positioningTimeoutRef.current);
+    const requestedPageIndex = Math.max(0, initialPageIndex || 0);
+    lastMeasuredPageCountRef.current = null;
+    stablePageMeasureCountRef.current = 0;
+    requestedPageIndexRef.current = requestedPageIndex;
+    savedProgressRef.current = '';
+    setIsPageContentHidden(true);
+    setIsPagePositioning(true);
+    setContentWidth(1);
+    setPageCount(1);
+    setPageIndex(0);
+    setPageStep(1);
+    setMeasuredChapterHref('');
+  }, [chapter?.href]);
 
   useEffect(() => {
     const page = pageRef.current;
@@ -56,7 +77,15 @@ export function ReaderView({
     }
 
     let frameID = 0;
-    let timeoutID = 0;
+    const timeoutIDs = [];
+
+    function finishPagePositioning() {
+      window.clearTimeout(positioningTimeoutRef.current);
+      positioningTimeoutRef.current = window.setTimeout(() => {
+        setIsPageContentHidden(false);
+        setIsPagePositioning(false);
+      }, 80);
+    }
 
     function measurePages() {
       const pageStyle = window.getComputedStyle(page);
@@ -80,12 +109,39 @@ export function ReaderView({
       setPageStep(nextPageStep);
       setPageCount(nextPageCount);
       setPageIndex((current) => {
-        const nextIndex = Math.min(current, nextPageCount - 1);
-        if (nextIndex !== current) {
-          onPageChange(nextIndex);
+        if (requestedPageIndexRef.current !== null) {
+          const requestedPageIndex = requestedPageIndexRef.current;
+
+          // WebView column layout can briefly report the wrong page count while
+          // a new chapter settles, so do not consume an out-of-range request
+          // until the measured page count has stabilized.
+          const isEndRequest =
+            requestedPageIndex >= LAST_PAGE_REQUEST_THRESHOLD;
+          const isInRange = requestedPageIndex <= nextPageCount - 1;
+          const stableMeasureCount =
+            lastMeasuredPageCountRef.current === nextPageCount
+              ? stablePageMeasureCountRef.current + 1
+              : 1;
+          const isStable = stableMeasureCount >= 2;
+          const isSettledEndRequest =
+            isEndRequest &&
+            isStable &&
+            (nextPageCount > 1 || stableMeasureCount >= 4);
+
+          stablePageMeasureCountRef.current = stableMeasureCount;
+          if (isInRange || (!isEndRequest && isStable) || isSettledEndRequest) {
+            requestedPageIndexRef.current = null;
+            finishPagePositioning();
+          }
+          lastMeasuredPageCountRef.current = nextPageCount;
+          return Math.min(requestedPageIndex, nextPageCount - 1);
         }
-        return nextIndex;
+
+        lastMeasuredPageCountRef.current = nextPageCount;
+        finishPagePositioning();
+        return Math.min(current, nextPageCount - 1);
       });
+      setMeasuredChapterHref(chapter?.href || '');
     }
 
     function scheduleMeasure() {
@@ -94,12 +150,15 @@ export function ReaderView({
     }
 
     scheduleMeasure();
-    timeoutID = window.setTimeout(scheduleMeasure, 50);
+    timeoutIDs.push(window.setTimeout(scheduleMeasure, 50));
+    timeoutIDs.push(window.setTimeout(scheduleMeasure, 150));
+    timeoutIDs.push(window.setTimeout(scheduleMeasure, 300));
 
     if (typeof ResizeObserver === 'undefined') {
       return () => {
         window.cancelAnimationFrame(frameID);
-        window.clearTimeout(timeoutID);
+        window.clearTimeout(positioningTimeoutRef.current);
+        timeoutIDs.forEach((timeoutID) => window.clearTimeout(timeoutID));
       };
     }
 
@@ -109,23 +168,11 @@ export function ReaderView({
 
     return () => {
       window.cancelAnimationFrame(frameID);
-      window.clearTimeout(timeoutID);
+      window.clearTimeout(positioningTimeoutRef.current);
+      timeoutIDs.forEach((timeoutID) => window.clearTimeout(timeoutID));
       observer.disconnect();
     };
-  }, [chapter?.bodyHtml, isTocOpen, onPageChange]);
-
-  useEffect(() => {
-    const page = pageRef.current;
-    if (!page) {
-      return;
-    }
-
-    page.scrollTo({
-      left: pageIndex * pageStep,
-      top: 0,
-      behavior: 'smooth',
-    });
-  }, [chapter?.href, pageIndex, pageStep]);
+  }, [chapter?.bodyHtml, chapter?.href, isTocOpen]);
 
   const progressPercent = readingProgressPercent(
     chapterIndex,
@@ -133,9 +180,21 @@ export function ReaderView({
     pageIndex,
     pageCount,
   );
+  const isChapterMeasured = !chapter || measuredChapterHref === chapter.href;
+
+  const saveVisiblePage = useCallback((nextPageIndex, nextProgressPercent) => {
+    if (!chapter) {
+      return;
+    }
+
+    onPageChange(nextPageIndex, nextProgressPercent, {
+      chapterHref: chapter.href,
+      chapterIndex,
+    });
+  }, [chapter, chapterIndex, onPageChange]);
 
   useEffect(() => {
-    if (!readerBook || !chapter) {
+    if (!readerBook || !chapter || measuredChapterHref !== chapter.href) {
       return;
     }
 
@@ -150,25 +209,28 @@ export function ReaderView({
     }
 
     savedProgressRef.current = progressKey;
-    onPageChange(pageIndex, progressPercent);
+    saveVisiblePage(pageIndex, progressPercent);
   }, [
     chapter,
-    pageCount,
+    measuredChapterHref,
     pageIndex,
-    onPageChange,
     progressPercent,
     readerBook,
+    saveVisiblePage,
   ]);
 
   const goPrevious = useCallback(() => {
-    if (!readerBook) {
+    if (!readerBook || !isChapterMeasured) {
       return;
     }
 
     if (pageIndex > 0) {
       const nextPage = pageIndex - 1;
+      requestedPageIndexRef.current = null;
+      setIsPageContentHidden(false);
+      setIsPagePositioning(false);
       setPageIndex(nextPage);
-      onPageChange(nextPage, readingProgressPercent(
+      saveVisiblePage(nextPage, readingProgressPercent(
         chapterIndex,
         chapterCount,
         nextPage,
@@ -181,22 +243,26 @@ export function ReaderView({
   }, [
     chapterCount,
     chapterIndex,
-    onPageChange,
+    isChapterMeasured,
     onPrevious,
     pageCount,
     pageIndex,
     readerBook,
+    saveVisiblePage,
   ]);
 
   const goNext = useCallback(() => {
-    if (!readerBook) {
+    if (!readerBook || !isChapterMeasured) {
       return;
     }
 
     if (pageIndex < pageCount - 1) {
       const nextPage = pageIndex + 1;
+      requestedPageIndexRef.current = null;
+      setIsPageContentHidden(false);
+      setIsPagePositioning(false);
       setPageIndex(nextPage);
-      onPageChange(nextPage, readingProgressPercent(
+      saveVisiblePage(nextPage, readingProgressPercent(
         chapterIndex,
         chapterCount,
         nextPage,
@@ -209,11 +275,12 @@ export function ReaderView({
   }, [
     chapterCount,
     chapterIndex,
+    isChapterMeasured,
     onNext,
-    onPageChange,
     pageCount,
     pageIndex,
     readerBook,
+    saveVisiblePage,
   ]);
 
   useEffect(() => {
@@ -251,6 +318,12 @@ export function ReaderView({
   const pageLabel = `${pageIndex + 1} / ${pageCount}`;
   const columnGap = readerColumnGap(contentWidth);
   const columnWidth = readerColumnWidth(contentWidth);
+  const pageOffset = pageIndex * pageStep;
+  const contentClassName = [
+    'reader-chapter-content',
+    isPagePositioning ? 'is-positioning' : '',
+    isPageContentHidden ? 'is-hidden' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <main className={isTocOpen ? 'reader-shell' : 'reader-shell is-toc-collapsed'}>
@@ -308,16 +381,19 @@ export function ReaderView({
           </div>
         </div>
 
-        <article className="reader-page" aria-label={chapter.title} ref={pageRef}>
-          <div
-            className="reader-chapter-content"
-            ref={contentRef}
-            style={{
-              '--reader-column-gap': `${columnGap}px`,
-              '--reader-column-width': `${columnWidth}px`,
-            }}
-            dangerouslySetInnerHTML={{__html: chapter.bodyHtml}}
-          />
+        <article className="reader-page" aria-label={chapter.title}>
+          <div className="reader-page-frame" ref={pageRef}>
+            <div
+              className={contentClassName}
+              ref={contentRef}
+              style={{
+                '--reader-column-gap': `${columnGap}px`,
+                '--reader-column-width': `${columnWidth}px`,
+                '--reader-page-offset': `${pageOffset}px`,
+              }}
+              dangerouslySetInnerHTML={{__html: chapter.bodyHtml}}
+            />
+          </div>
         </article>
 
         <div className="reader-bottom-bar" aria-label="Reader navigation">
@@ -325,7 +401,7 @@ export function ReaderView({
             <button
               aria-label="Previous chapter"
               className="reader-nav-button"
-              disabled={chapterIndex === 0 && pageIndex === 0}
+              disabled={!isChapterMeasured || (chapterIndex === 0 && pageIndex === 0)}
               onClick={goPrevious}
               type="button"
             >
@@ -334,7 +410,10 @@ export function ReaderView({
             <button
               aria-label="Next chapter"
               className="reader-nav-button"
-              disabled={chapterIndex >= chapterCount - 1 && pageIndex >= pageCount - 1}
+              disabled={
+                !isChapterMeasured ||
+                (chapterIndex >= chapterCount - 1 && pageIndex >= pageCount - 1)
+              }
               onClick={goNext}
               type="button"
             >

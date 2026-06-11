@@ -754,6 +754,12 @@
     scroll-behavior: smooth;
 }
 
+.reader-page-frame {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
 .reader-chapter-content {
     min-width: 100%;
     height: 100%;
@@ -765,6 +771,16 @@
     font-size: 1.16rem;
     line-height: 1.22;
     overflow: visible;
+    transform: translateX(calc(var(--reader-page-offset, 0px) * -1));
+    transition: transform 220ms ease;
+}
+
+.reader-chapter-content.is-positioning {
+    transition: none;
+}
+
+.reader-chapter-content.is-hidden {
+    visibility: hidden;
 }
 
 .reader-chapter-content h1,
@@ -867,5 +883,11 @@
 
     .reader-chapter-content {
         font-size: 1rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reader-chapter-content {
+        transition: none;
     }
 }

@@ -157,6 +157,7 @@ Useful local skills may include:
 - `code-review-and-quality` for review and verification passes.
 - `git-workflow-and-versioning` for commits and branch hygiene.
 - `frontend-ui-engineering` for UI tickets.
+- `frontend-visual-regression-testing` for screenshot-driven UI flow testing, reader navigation checks, and fast transition/frame-sampling bugs.
 
 Do not force a skill when it does not apply. If a relevant skill is missing, unreadable, or conflicts with this `AGENTS.md`, state the issue and follow `AGENTS.md`.
 

@@ -115,17 +115,17 @@ export namespace library {
 		    return a;
 		}
 	}
-
+	
 	export class ReaderChapter {
 	    index: number;
 	    href: string;
 	    title: string;
 	    bodyHtml: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ReaderChapter(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.index = source["index"];
@@ -138,18 +138,18 @@ export namespace library {
 	    book: BookMetadata;
 	    chapters: ReaderChapter[];
 	    currentChapterIndex: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ReaderBook(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.book = this.convertValues(source["book"], BookMetadata);
 	        this.chapters = this.convertValues(source["chapters"], ReaderChapter);
 	        this.currentChapterIndex = source["currentChapterIndex"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -190,23 +190,23 @@ export namespace library {
 }
 
 export namespace main {
-
+	
 	export class ImportEPUBResult {
 	    book: library.BookMetadata;
 	    duplicate: boolean;
 	    canceled: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImportEPUBResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.book = this.convertValues(source["book"], library.BookMetadata);
 	        this.duplicate = source["duplicate"];
 	        this.canceled = source["canceled"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -227,3 +227,4 @@ export namespace main {
 	}
 
 }
+
