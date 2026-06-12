@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {
   GetReaderBook,
+  SaveReaderAppearance,
   SaveReadingProgress,
 } from '../../wailsjs/go/main/App';
 
@@ -139,6 +140,57 @@ export function useReader() {
     }
   }
 
+  async function saveReaderAppearance(appearance) {
+    const currentReaderBook = readerBookRef.current;
+    if (!currentReaderBook?.book?.id) {
+      return;
+    }
+
+    const bookID = currentReaderBook.book.id;
+    const nextAppearance = {
+      backgroundColor: appearance?.backgroundColor,
+      fontSize: appearance?.fontSize,
+    };
+
+    setReaderBook((current) => {
+      if (!current || current.book.id !== bookID) {
+        return current;
+      }
+
+      const nextReaderBook = {
+        ...current,
+        book: {
+          ...current.book,
+          appearance: nextAppearance,
+        },
+      };
+      readerBookRef.current = nextReaderBook;
+      return nextReaderBook;
+    });
+
+    saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(async () => {
+      const nextBook = await SaveReaderAppearance(bookID, nextAppearance);
+      setReaderBook((current) => {
+        if (!current || current.book.id !== bookID) {
+          return current;
+        }
+
+        const nextReaderBook = {
+          ...current,
+          book: nextBook,
+        };
+        readerBookRef.current = nextReaderBook;
+        return nextReaderBook;
+      });
+    });
+
+    try {
+      await saveQueueRef.current;
+    } catch (err) {
+      setReaderError(readerErrorMessage(err));
+    }
+  }
+
   function goToNextChapter() {
     goToChapter(currentChapterIndexRef.current + 1);
   }
@@ -175,6 +227,7 @@ export function useReader() {
     readerBook,
     readerError,
     saveCurrentPage,
+    saveReaderAppearance,
   };
 }
 

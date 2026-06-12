@@ -11,14 +11,15 @@ type StorageInfo struct {
 
 // BookMetadata is the persisted record for an imported EPUB.
 type BookMetadata struct {
-	ID               string          `json:"id"`
-	Title            string          `json:"title"`
-	Author           string          `json:"author,omitempty"`
-	OriginalFileName string          `json:"originalFileName"`
-	FilePath         string          `json:"filePath"`
-	ImportedAt       time.Time       `json:"importedAt"`
-	Progress         ReadingProgress `json:"progress"`
-	Prompt           PromptConfig    `json:"prompt"`
+	ID               string           `json:"id"`
+	Title            string           `json:"title"`
+	Author           string           `json:"author,omitempty"`
+	OriginalFileName string           `json:"originalFileName"`
+	FilePath         string           `json:"filePath"`
+	ImportedAt       time.Time        `json:"importedAt"`
+	Progress         ReadingProgress  `json:"progress"`
+	Prompt           PromptConfig     `json:"prompt"`
+	Appearance       ReaderAppearance `json:"appearance"`
 }
 
 // ReadingProgress stores the user's last known location in a book.
@@ -33,6 +34,12 @@ type ReadingProgress struct {
 type PromptConfig struct {
 	CustomPrompt string    `json:"customPrompt,omitempty"`
 	UpdatedAt    time.Time `json:"updatedAt,omitempty"`
+}
+
+// ReaderAppearance stores reading comfort preferences for a book.
+type ReaderAppearance struct {
+	BackgroundColor string `json:"backgroundColor,omitempty"`
+	FontSize        int    `json:"fontSize,omitempty"`
 }
 
 // ReaderBook is the UI-facing payload for opening one imported EPUB.

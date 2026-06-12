@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+const (
+	defaultReaderBackgroundColor = "#ffffff"
+	defaultReaderFontSize        = 18
+	minReaderFontSize            = 16
+	maxReaderFontSize            = 24
+)
+
+var allowedReaderBackgroundColors = map[string]struct{}{
+	"#ffffff": {},
+	"#f8f1e7": {},
+	"#efe4ce": {},
+	"#eef4ee": {},
+	"#f1f1f1": {},
+}
+
 // Store persists local book metadata for the desktop app.
 type Store struct {
 	mu           sync.Mutex
@@ -202,6 +217,32 @@ func (s *Store) UpdateReadingProgress(id string, progress ReadingProgress) (Book
 	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
 }
 
+// UpdateReaderAppearance stores reading comfort preferences for one book.
+func (s *Store) UpdateReaderAppearance(id string, appearance ReaderAppearance) (BookMetadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := s.readLibrary()
+	if err != nil {
+		return BookMetadata{}, err
+	}
+
+	for i := range file.Books {
+		if file.Books[i].ID != strings.TrimSpace(id) {
+			continue
+		}
+
+		file.Books[i].Appearance = normalizeReaderAppearance(appearance)
+		if err := s.writeLibrary(file); err != nil {
+			return BookMetadata{}, err
+		}
+
+		return file.Books[i], nil
+	}
+
+	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
+}
+
 // prepareBook normalizes and validates metadata before it is written to disk.
 func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMetadata, error) {
 	var err error
@@ -261,6 +302,37 @@ func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMeta
 	if book.ImportedAt.IsZero() {
 		book.ImportedAt = s.timeProvider()
 	}
+	if existing != nil && isZeroReaderAppearance(book.Appearance) {
+		book.Appearance = existing.Appearance
+	}
+	book.Appearance = normalizeReaderAppearance(book.Appearance)
 
 	return book, nil
+}
+
+func normalizeReaderAppearance(appearance ReaderAppearance) ReaderAppearance {
+	backgroundColor := strings.ToLower(strings.TrimSpace(appearance.BackgroundColor))
+	if _, ok := allowedReaderBackgroundColors[backgroundColor]; !ok {
+		backgroundColor = defaultReaderBackgroundColor
+	}
+
+	fontSize := appearance.FontSize
+	if fontSize == 0 {
+		fontSize = defaultReaderFontSize
+	}
+	if fontSize < minReaderFontSize {
+		fontSize = minReaderFontSize
+	}
+	if fontSize > maxReaderFontSize {
+		fontSize = maxReaderFontSize
+	}
+
+	return ReaderAppearance{
+		BackgroundColor: backgroundColor,
+		FontSize:        fontSize,
+	}
+}
+
+func isZeroReaderAppearance(appearance ReaderAppearance) bool {
+	return strings.TrimSpace(appearance.BackgroundColor) == "" && appearance.FontSize == 0
 }

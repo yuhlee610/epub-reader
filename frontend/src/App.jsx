@@ -25,6 +25,7 @@ function App() {
             library.loadBooks();
           }}
           onNext={reader.goToNextChapter}
+          onAppearanceChange={reader.saveReaderAppearance}
           onPageChange={reader.saveCurrentPage}
           onPrevious={reader.goToPreviousChapter}
           onSelectChapter={reader.goToChapter}

@@ -126,11 +126,11 @@ Book metadata should track at least:
 
 Do not store secrets or private user content in logs.
 
-## Spec-Driven Development
+## Planning
 
-Use spec-driven development for meaningful work.
+Use spec-driven development for substantial product work.
 
-Before implementation, make sure there is a written spec in the Linear ticket or linked project note. The spec should include:
+Before implementation, make sure the intended behavior is written down in a Linear ticket, linked project note, or local plan. For small fixes, a concise plan in the conversation is enough. Larger specs should include:
 
 - Problem statement.
 - User workflow.
@@ -155,86 +155,11 @@ Useful local skills may include:
 - `source-driven-development` for grounding implementation in current code and authoritative sources.
 - `incremental-implementation` for small, safe implementation steps.
 - `code-review-and-quality` for review and verification passes.
-- `git-workflow-and-versioning` for commits and branch hygiene.
 - `frontend-ui-engineering` for UI tickets.
 - `frontend-visual-regression-testing` for screenshot-driven UI flow testing, reader navigation checks, and fast transition/frame-sampling bugs.
+- `git-workflow-and-versioning` for commits and branch hygiene.
 
 Do not force a skill when it does not apply. If a relevant skill is missing, unreadable, or conflicts with this `AGENTS.md`, state the issue and follow `AGENTS.md`.
-
-## Linear Workflow
-
-The user already has a Linear team but no project. Use the existing team. Do not assume a Linear project exists.
-
-When Linear access is available:
-
-- Create or update a Linear ticket before substantial implementation.
-- Use a clear title with the product area, for example `Reader: Add table of contents sidebar`.
-- Include the spec in the ticket description.
-- Add acceptance criteria that can be reviewed directly in Linear.
-- Add implementation notes as comments when decisions are made.
-- Move the ticket through the available team workflow statuses.
-- Add a final comment with changed files, verification commands, and any known gaps.
-
-When Linear access is not available:
-
-- Draft the ticket content in the response or in a local planning file only if the user asks.
-- Ask the user to create or connect the ticket before treating the work as tracked.
-
-Default ticket template:
-
-```md
-## Problem
-
-## User Workflow
-
-## Requirements
-
-## Non-Goals
-
-## Proposed Implementation
-
-## Acceptance Criteria
-
-## Verification
-
-## Open Questions
-```
-
-## PM Agent Role
-
-Use a PM agent for Linear/spec management when sub-agents are available and the task is large enough to need ticket tracking.
-
-The PM agent is responsible for:
-
-- Turning user requests into Linear-ready specs.
-- Creating or updating Linear tickets when tools are available.
-- Keeping scope, acceptance criteria, and open questions clear.
-- Commenting on ticket progress and final verification.
-- Not implementing code.
-
-The PM agent should ask for clarification only when the ticket would otherwise encode a risky or false assumption.
-
-## Implementation Agent Role
-
-The main implementation agent is responsible for:
-
-- Reading the relevant code before editing.
-- Keeping changes scoped to the ticket/spec.
-- Following Go and frontend conventions in this file.
-- Updating generated Wails bindings when backend methods change.
-- Running appropriate verification commands.
-- Reporting changed files and verification results.
-
-## Review/Test Agent Role
-
-Use a separate review/test agent after implementation when sub-agents are available.
-
-The review/test agent is responsible for:
-
-- Reviewing code for bugs, regressions, unclear behavior, and missing edge cases.
-- Running available checks/tests.
-- Reporting findings with file and line references.
-- Reporting missing test coverage when relevant.
 
 ## Collaboration Rules
 
@@ -242,5 +167,5 @@ The review/test agent is responsible for:
 - Preserve user changes and never revert unrelated work.
 - Ask before adding major dependencies.
 - Keep generated files and lockfiles consistent with the command that produced them.
-- Record important product decisions in Linear specs/tickets.
+- Record important product decisions in the relevant ticket, note, or final response.
 - If Readest UI behavior is used as a reference, mention the specific public page or user-provided screenshot that informed the decision.

@@ -21,4 +21,6 @@ export function ManagedBookPath(arg1:string,arg2:string):Promise<string>;
 
 export function SaveBookMetadata(arg1:library.BookMetadata):Promise<library.BookMetadata>;
 
+export function SaveReaderAppearance(arg1:string,arg2:library.ReaderAppearance):Promise<library.BookMetadata>;
+
 export function SaveReadingProgress(arg1:string,arg2:library.ReadingProgress):Promise<library.BookMetadata>;

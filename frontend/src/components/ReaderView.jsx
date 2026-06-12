@@ -23,6 +23,18 @@ import {
 import {coverTitle} from '../lib/bookFormatters';
 
 const LAST_PAGE_REQUEST_THRESHOLD = Number.MAX_SAFE_INTEGER / 2;
+const DEFAULT_READER_APPEARANCE = {
+  backgroundColor: '#ffffff',
+  fontSize: 18,
+};
+const READER_BACKGROUND_OPTIONS = [
+  {label: 'White', value: '#ffffff'},
+  {label: 'Warm', value: '#f8f1e7'},
+  {label: 'Sepia', value: '#efe4ce'},
+  {label: 'Sage', value: '#eef4ee'},
+  {label: 'Gray', value: '#f1f1f1'},
+];
+const READER_FONT_SIZE_OPTIONS = [16, 18, 20, 22, 24];
 
 export function ReaderView({
   chapter,
@@ -30,6 +42,7 @@ export function ReaderView({
   initialPageIndex,
   isLoading,
   onClose,
+  onAppearanceChange,
   onNext,
   onPageChange,
   onPrevious,
@@ -172,7 +185,7 @@ export function ReaderView({
       timeoutIDs.forEach((timeoutID) => window.clearTimeout(timeoutID));
       observer.disconnect();
     };
-  }, [chapter?.bodyHtml, chapter?.href, isTocOpen]);
+  }, [chapter?.bodyHtml, chapter?.href, isTocOpen, readerBook?.book?.appearance?.fontSize]);
 
   const progressPercent = readingProgressPercent(
     chapterIndex,
@@ -319,6 +332,7 @@ export function ReaderView({
   const columnGap = readerColumnGap(contentWidth);
   const columnWidth = readerColumnWidth(contentWidth);
   const pageOffset = pageIndex * pageStep;
+  const appearance = normalizeReaderAppearance(readerBook.book.appearance);
   const contentClassName = [
     'reader-chapter-content',
     isPagePositioning ? 'is-positioning' : '',
@@ -326,13 +340,21 @@ export function ReaderView({
   ].filter(Boolean).join(' ');
 
   return (
-    <main className={isTocOpen ? 'reader-shell' : 'reader-shell is-toc-collapsed'}>
+    <main
+      className={isTocOpen ? 'reader-shell' : 'reader-shell is-toc-collapsed'}
+      style={{
+        '--reader-background-color': appearance.backgroundColor,
+        '--reader-font-size': `${appearance.fontSize}px`,
+      }}
+    >
       {isTocOpen && (
         <ReaderSidebar
           activeChapterIndex={chapterIndex}
+          appearance={appearance}
           book={readerBook.book}
           chapters={readerBook.chapters}
           onClose={onClose}
+          onAppearanceChange={onAppearanceChange}
           onSelectChapter={onSelectChapter}
           onToggleToc={() => setIsTocOpen(false)}
         />
@@ -480,14 +502,33 @@ function shouldIgnoreReaderShortcut(event) {
   );
 }
 
+function normalizeReaderAppearance(appearance) {
+  const backgroundColor = String(appearance?.backgroundColor || '').toLowerCase();
+  const backgroundOption = READER_BACKGROUND_OPTIONS.find((option) => (
+    option.value === backgroundColor
+  ));
+  const fontSize = Number(appearance?.fontSize);
+
+  return {
+    backgroundColor: backgroundOption?.value || DEFAULT_READER_APPEARANCE.backgroundColor,
+    fontSize: READER_FONT_SIZE_OPTIONS.includes(fontSize)
+      ? fontSize
+      : DEFAULT_READER_APPEARANCE.fontSize,
+  };
+}
+
 function ReaderSidebar({
   activeChapterIndex,
+  appearance,
   book,
   chapters,
   onClose,
+  onAppearanceChange,
   onSelectChapter,
   onToggleToc,
 }) {
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+
   return (
     <aside className="reader-sidebar" aria-label="Reader table of contents">
       <div className="reader-sidebar-toolbar">
@@ -508,8 +549,9 @@ function ReaderSidebar({
             <Search aria-hidden="true" size={17} strokeWidth={2} />
           </button>
           <button
-            aria-label="Reader menu"
-            className="reader-icon-button"
+            aria-label="Reader appearance settings"
+            className={isAppearanceOpen ? 'reader-icon-button is-active' : 'reader-icon-button'}
+            onClick={() => setIsAppearanceOpen((isOpen) => !isOpen)}
             type="button"
           >
             <Menu aria-hidden="true" size={18} strokeWidth={2} />
@@ -532,21 +574,76 @@ function ReaderSidebar({
         </div>
       </div>
 
-      <div className="reader-book-summary">
-        <div className="reader-cover" aria-hidden="true">
-          <span className="cover-name">{coverTitle(book.title)}</span>
-          <span className="cover-author">{book.author || 'Unknown author'}</span>
+      <div className="reader-sidebar-header">
+        <div className="reader-book-summary">
+          <div className="reader-cover" aria-hidden="true">
+            <span className="cover-name">{coverTitle(book.title)}</span>
+            <span className="cover-author">{book.author || 'Unknown author'}</span>
+          </div>
+          <div className="reader-book-copy">
+            <h1>{book.title || 'Untitled book'}</h1>
+            <p>{book.author || 'Unknown author'}</p>
+          </div>
+          <Info
+            aria-hidden="true"
+            className="reader-info-icon"
+            size={16}
+            strokeWidth={2}
+          />
         </div>
-        <div className="reader-book-copy">
-          <h1>{book.title || 'Untitled book'}</h1>
-          <p>{book.author || 'Unknown author'}</p>
-        </div>
-        <Info
-          aria-hidden="true"
-          className="reader-info-icon"
-          size={16}
-          strokeWidth={2}
-        />
+
+        {isAppearanceOpen && (
+          <div className="reader-appearance-panel" aria-label="Reader appearance settings">
+            <div className="reader-settings-row">
+              <span>Background</span>
+              <div className="reader-color-options">
+                {READER_BACKGROUND_OPTIONS.map((option) => (
+                  <button
+                    aria-label={`Use ${option.label} background`}
+                    aria-pressed={appearance.backgroundColor === option.value}
+                    className={
+                      appearance.backgroundColor === option.value
+                        ? 'reader-color-swatch is-active'
+                        : 'reader-color-swatch'
+                    }
+                    key={option.value}
+                    onClick={() => onAppearanceChange?.({
+                      ...appearance,
+                      backgroundColor: option.value,
+                    })}
+                    style={{'--swatch-color': option.value}}
+                    title={option.label}
+                    type="button"
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="reader-settings-row">
+              <span>Font size</span>
+              <div className="reader-font-size-options">
+                {READER_FONT_SIZE_OPTIONS.map((size) => (
+                  <button
+                    aria-pressed={appearance.fontSize === size}
+                    className={
+                      appearance.fontSize === size
+                        ? 'reader-font-size-option is-active'
+                        : 'reader-font-size-option'
+                    }
+                    key={size}
+                    onClick={() => onAppearanceChange?.({
+                      ...appearance,
+                      fontSize: size,
+                    })}
+                    type="button"
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <ol className="reader-toc">

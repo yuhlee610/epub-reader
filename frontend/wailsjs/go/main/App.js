@@ -38,6 +38,10 @@ export function SaveBookMetadata(arg1) {
   return window['go']['main']['App']['SaveBookMetadata'](arg1);
 }
 
+export function SaveReaderAppearance(arg1, arg2) {
+  return window['go']['main']['App']['SaveReaderAppearance'](arg1, arg2);
+}
+
 export function SaveReadingProgress(arg1, arg2) {
   return window['go']['main']['App']['SaveReadingProgress'](arg1, arg2);
 }

@@ -213,3 +213,43 @@ func TestSaveBookAcceptsUppercaseEPUBExtension(t *testing.T) {
 		t.Fatalf("SaveBook() error = %v", err)
 	}
 }
+
+// TestUpdateReaderAppearancePersists verifies reader comfort preferences are
+// normalized, saved, and available after reloading the store.
+func TestUpdateReaderAppearancePersists(t *testing.T) {
+	store := newTestStore(t)
+
+	book, err := store.SaveBook(BookMetadata{
+		Title:            "Cradle",
+		OriginalFileName: "cradle.epub",
+	})
+	if err != nil {
+		t.Fatalf("SaveBook() error = %v", err)
+	}
+
+	updated, err := store.UpdateReaderAppearance(book.ID, ReaderAppearance{
+		BackgroundColor: "#F8F1E7",
+		FontSize:        99,
+	})
+	if err != nil {
+		t.Fatalf("UpdateReaderAppearance() error = %v", err)
+	}
+	if updated.Appearance.BackgroundColor != "#f8f1e7" {
+		t.Fatalf("BackgroundColor = %q, want normalized palette color", updated.Appearance.BackgroundColor)
+	}
+	if updated.Appearance.FontSize != maxReaderFontSize {
+		t.Fatalf("FontSize = %d, want clamped max %d", updated.Appearance.FontSize, maxReaderFontSize)
+	}
+
+	reloaded, err := NewStore(store.Info().RootDir)
+	if err != nil {
+		t.Fatalf("reload NewStore() error = %v", err)
+	}
+	got, err := reloaded.GetBook(book.ID)
+	if err != nil {
+		t.Fatalf("GetBook() error = %v", err)
+	}
+	if got.Appearance != updated.Appearance {
+		t.Fatalf("persisted Appearance = %#v, want %#v", got.Appearance, updated.Appearance)
+	}
+}

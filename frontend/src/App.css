@@ -499,7 +499,7 @@
     grid-template-columns: 306px minmax(0, 1fr);
     min-height: 100vh;
     overflow: hidden;
-    background: #ffffff;
+    background: var(--reader-background-color, #ffffff);
     color: #242424;
 }
 
@@ -555,8 +555,17 @@
     background: #e2e2e2;
 }
 
+.reader-icon-button.is-active {
+    background: #dedede;
+    color: #222222;
+}
+
 .reader-icon-button.is-muted {
     background: #e8e8e8;
+}
+
+.reader-sidebar-header {
+    min-width: 0;
 }
 
 .reader-book-summary {
@@ -567,6 +576,65 @@
     align-items: center;
     padding: 0 22px 10px 8px;
     border-bottom: 1px solid #dddddd;
+}
+
+.reader-appearance-panel {
+    display: grid;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #dddddd;
+    background: #eeeeee;
+}
+
+.reader-settings-row {
+    display: grid;
+    gap: 6px;
+}
+
+.reader-settings-row > span {
+    color: #777777;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.reader-color-options,
+.reader-font-size-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.reader-color-swatch {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid #c9c9c9;
+    border-radius: 999px;
+    background: var(--swatch-color);
+    cursor: pointer;
+}
+
+.reader-color-swatch.is-active {
+    outline: 2px solid #444444;
+    outline-offset: 2px;
+}
+
+.reader-font-size-option {
+    min-width: 32px;
+    height: 26px;
+    border: 0;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #333333;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.reader-font-size-option.is-active {
+    background: #222222;
+    color: #ffffff;
 }
 
 .reader-cover {
@@ -690,7 +758,7 @@
     min-width: 0;
     height: 100vh;
     overflow: hidden;
-    background: #ffffff;
+    background: var(--reader-background-color, #ffffff);
 }
 
 .reader-topline {
@@ -750,6 +818,7 @@
     box-sizing: border-box;
     overflow: hidden;
     padding: 48px 72px 34px;
+    background: var(--reader-background-color, #ffffff);
     contain: layout paint;
     scroll-behavior: smooth;
 }
@@ -768,8 +837,8 @@
     column-width: var(--reader-column-width);
     color: #222222;
     font-family: Georgia, "Times New Roman", serif;
-    font-size: 1.16rem;
-    line-height: 1.22;
+    font-size: var(--reader-font-size, 18px);
+    line-height: 1.32;
     overflow: visible;
     transform: translateX(calc(var(--reader-page-offset, 0px) * -1));
     transition: transform 220ms ease;
@@ -882,7 +951,7 @@
     }
 
     .reader-chapter-content {
-        font-size: 1rem;
+        font-size: var(--reader-font-size, 18px);
     }
 }
 

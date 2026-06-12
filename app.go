@@ -150,6 +150,16 @@ func (a *App) SaveReadingProgress(id string, progress library.ReadingProgress) (
 	return store.UpdateReadingProgress(id, progress)
 }
 
+// SaveReaderAppearance persists reading appearance preferences for one book.
+func (a *App) SaveReaderAppearance(id string, appearance library.ReaderAppearance) (library.BookMetadata, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.BookMetadata{}, err
+	}
+
+	return store.UpdateReaderAppearance(id, appearance)
+}
+
 // SaveBookMetadata creates or updates one book metadata record.
 func (a *App) SaveBookMetadata(book library.BookMetadata) (library.BookMetadata, error) {
 	store, err := a.libraryStore()

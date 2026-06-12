@@ -1,5 +1,19 @@
 export namespace library {
 	
+	export class ReaderAppearance {
+	    backgroundColor?: string;
+	    fontSize?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReaderAppearance(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.backgroundColor = source["backgroundColor"];
+	        this.fontSize = source["fontSize"];
+	    }
+	}
 	export class PromptConfig {
 	    customPrompt?: string;
 	    // Go type: time
@@ -80,6 +94,7 @@ export namespace library {
 	    importedAt: any;
 	    progress: ReadingProgress;
 	    prompt: PromptConfig;
+	    appearance: ReaderAppearance;
 	
 	    static createFrom(source: any = {}) {
 	        return new BookMetadata(source);
@@ -95,6 +110,7 @@ export namespace library {
 	        this.importedAt = this.convertValues(source["importedAt"], null);
 	        this.progress = this.convertValues(source["progress"], ReadingProgress);
 	        this.prompt = this.convertValues(source["prompt"], PromptConfig);
+	        this.appearance = this.convertValues(source["appearance"], ReaderAppearance);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -115,6 +131,7 @@ export namespace library {
 		    return a;
 		}
 	}
+	
 	
 	export class ReaderChapter {
 	    index: number;
