@@ -60,6 +60,7 @@ export function ReaderView({
   const [pageCount, setPageCount] = useState(1);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageStep, setPageStep] = useState(1);
+  const [maxPageOffset, setMaxPageOffset] = useState(0);
   const [isTocOpen, setIsTocOpen] = useState(true);
   const [isPageContentHidden, setIsPageContentHidden] = useState(true);
   const [isPagePositioning, setIsPagePositioning] = useState(true);
@@ -79,6 +80,7 @@ export function ReaderView({
     setPageCount(1);
     setPageIndex(0);
     setPageStep(1);
+    setMaxPageOffset(0);
     setMeasuredChapterHref('');
   }, [chapter?.href]);
 
@@ -106,20 +108,18 @@ export function ReaderView({
         parseFloat(pageStyle.paddingLeft) + parseFloat(pageStyle.paddingRight);
       const nextContentWidth = Math.max(1, page.clientWidth - horizontalPadding);
       const nextColumnGap = readerColumnGap(nextContentWidth);
-      const nextColumnCount = readerColumnCount(nextContentWidth);
       const nextColumnWidth = readerColumnWidth(nextContentWidth);
-      const nextPageStep = Math.max(
-        1,
-        nextColumnCount * (nextColumnWidth + nextColumnGap),
-      );
-      const totalWidth = Math.max(1, content.scrollWidth);
+      const nextPageStep = Math.max(1, nextColumnWidth + nextColumnGap);
+      const totalWidth = readerVisibleContentWidth(content, page) || Math.max(1, content.scrollWidth);
+      const nextMaxPageOffset = Math.max(0, totalWidth - nextContentWidth);
       const nextPageCount = Math.max(
         1,
-        Math.ceil(totalWidth / nextPageStep),
+        Math.ceil(nextMaxPageOffset / nextPageStep) + 1,
       );
 
       setContentWidth(nextContentWidth);
       setPageStep(nextPageStep);
+      setMaxPageOffset(nextMaxPageOffset);
       setPageCount(nextPageCount);
       setPageIndex((current) => {
         if (requestedPageIndexRef.current !== null) {
@@ -331,7 +331,7 @@ export function ReaderView({
   const pageLabel = `${pageIndex + 1} / ${pageCount}`;
   const columnGap = readerColumnGap(contentWidth);
   const columnWidth = readerColumnWidth(contentWidth);
-  const pageOffset = pageIndex * pageStep;
+  const pageOffset = Math.min(pageIndex * pageStep, maxPageOffset);
   const appearance = normalizeReaderAppearance(readerBook.book.appearance);
   const contentClassName = [
     'reader-chapter-content',
@@ -464,6 +464,49 @@ function readerColumnWidth(contentWidth) {
   }
 
   return Math.max(280, (contentWidth - readerColumnGap(contentWidth)) / 2);
+}
+
+function readerVisibleContentWidth(content, page) {
+  if (typeof document.createRange !== 'function') {
+    return 0;
+  }
+
+  const pageRect = page.getBoundingClientRect();
+  const transform = window.getComputedStyle(content).transform;
+  const currentOffset = readerTransformOffset(transform);
+  const range = document.createRange();
+  range.selectNodeContents(content);
+
+  let maxRight = 0;
+  for (const rect of range.getClientRects()) {
+    if (
+      rect.width <= 0 ||
+      rect.height <= 0 ||
+      rect.bottom <= pageRect.top ||
+      rect.top >= pageRect.bottom
+    ) {
+      continue;
+    }
+
+    maxRight = Math.max(maxRight, rect.right + currentOffset - pageRect.left);
+  }
+  range.detach();
+
+  return Math.max(0, maxRight);
+}
+
+function readerTransformOffset(transform) {
+  if (!transform || transform === 'none') {
+    return 0;
+  }
+
+  const match = /matrix\(([^)]+)\)/.exec(transform);
+  if (!match) {
+    return 0;
+  }
+
+  const values = match[1].split(',').map((value) => Number(value.trim()));
+  return Math.abs(values[4] || 0);
 }
 
 function readingProgressPercent(chapterIndex, chapterCount, pageIndex, pageCount) {
