@@ -23,6 +23,7 @@ import {
   WindowToggleMaximise,
 } from '../../wailsjs/runtime/runtime';
 import {coverTitle} from '../lib/bookFormatters';
+import {buildBookAwareStudyPrompt} from '../lib/studyPrompt';
 
 const LAST_PAGE_REQUEST_THRESHOLD = Number.MAX_SAFE_INTEGER / 2;
 const DEFAULT_READER_APPEARANCE = {
@@ -357,7 +358,7 @@ export function ReaderView({
     const isGoogleTranslate = tool === 'google';
     const clipboardText = isGoogleTranslate
       ? selectedText
-      : buildStudyPrompt({
+      : buildBookAwareStudyPrompt({
         book: currentBook,
         chapter,
         text: selectedText,
@@ -724,25 +725,6 @@ function clampNumber(value, min, max) {
 function googleTranslateURL(text) {
   const selectedText = encodeURIComponent(text);
   return `https://translate.google.com/?sl=auto&tl=vi&op=translate&text=${selectedText}`;
-}
-
-function buildStudyPrompt({book, chapter, text}) {
-  const bookTitle = book?.title || 'this book';
-  const authorText = book?.author ? ` by ${book.author}` : '';
-  const chapterTitle = chapter?.title ? `, chapter "${chapter.title}"` : '';
-
-  return [
-    `I am reading "${bookTitle}"${authorText}${chapterTitle}.`,
-    '',
-    'Selected passage:',
-    text,
-    '',
-    'Please help me study this passage:',
-    '1. Translate it naturally into Vietnamese with the book context in mind.',
-    '2. Explain important vocabulary and meanings.',
-    '3. Explain useful grammar patterns briefly.',
-    '4. Add any nuance needed to understand the passage.',
-  ].join('\n');
 }
 
 function GoogleTranslateIcon() {
