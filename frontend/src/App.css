@@ -900,6 +900,80 @@
     opacity: 0.35;
 }
 
+.reader-selection-actions {
+    --wails-draggable: no-drag;
+    position: absolute;
+    right: 48px;
+    bottom: 48px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: min(620px, calc(100% - 96px));
+    padding: 6px;
+    border: 1px solid rgba(166, 158, 143, 0.5);
+    border-radius: 6px;
+    background: rgba(255, 252, 245, 0.96);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+    color: #39342b;
+}
+
+.reader-selection-actions > span {
+    min-width: 0;
+    max-width: 150px;
+    overflow: hidden;
+    color: #766f62;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-study-button {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(61, 56, 47, 0.12);
+    border-radius: 5px;
+    background: #ffffff;
+    color: #242424;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.reader-study-button:hover,
+.reader-study-button:focus-visible {
+    background: #f6f3ec;
+    border-color: rgba(61, 56, 47, 0.22);
+}
+
+.reader-study-button svg {
+    display: block;
+}
+
+.reader-brand-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.reader-study-toast {
+    position: absolute;
+    right: 48px;
+    bottom: 88px;
+    z-index: 6;
+    max-width: min(420px, calc(100% - 96px));
+    padding: 8px 10px;
+    border: 1px solid rgba(172, 159, 130, 0.45);
+    border-radius: 6px;
+    background: rgba(255, 252, 245, 0.98);
+    color: #474035;
+    font-size: 0.78rem;
+    font-weight: 700;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+}
+
 @media (max-width: 680px) {
     .library-toolbar {
         gap: 12px;
@@ -952,6 +1026,24 @@
 
     .reader-chapter-content {
         font-size: var(--reader-font-size, 18px);
+    }
+
+    .reader-selection-actions {
+        right: 14px;
+        bottom: 44px;
+        flex-wrap: wrap;
+        max-width: calc(100% - 28px);
+    }
+
+    .reader-selection-actions > span {
+        flex-basis: 100%;
+        max-width: none;
+    }
+
+    .reader-study-toast {
+        right: 14px;
+        bottom: 126px;
+        max-width: calc(100% - 28px);
     }
 }
 

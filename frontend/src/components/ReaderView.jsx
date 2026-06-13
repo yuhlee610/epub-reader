@@ -16,6 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import {
+  BrowserOpenURL,
+  ClipboardSetText,
   Quit,
   WindowMinimise,
   WindowToggleMaximise,
@@ -35,6 +37,22 @@ const READER_BACKGROUND_OPTIONS = [
   {label: 'Gray', value: '#f1f1f1'},
 ];
 const READER_FONT_SIZE_OPTIONS = [16, 18, 20, 22, 24];
+const STUDY_TOOL_CONFIG = {
+  google: {
+    label: 'Google Translate',
+    message: 'Copied selected text and opened Google Translate.',
+  },
+  chatgpt: {
+    label: 'ChatGPT',
+    message: 'Copied a book-aware study prompt and opened ChatGPT.',
+    url: 'https://chatgpt.com/',
+  },
+  gemini: {
+    label: 'Gemini',
+    message: 'Copied a book-aware study prompt and opened Gemini.',
+    url: 'https://gemini.google.com/app',
+  },
+};
 
 export function ReaderView({
   chapter,
@@ -51,11 +69,13 @@ export function ReaderView({
 }) {
   const contentRef = useRef(null);
   const pageRef = useRef(null);
+  const stageRef = useRef(null);
   const lastMeasuredPageCountRef = useRef(null);
   const stablePageMeasureCountRef = useRef(0);
   const positioningTimeoutRef = useRef(null);
   const requestedPageIndexRef = useRef(0);
   const savedProgressRef = useRef('');
+  const studyMessageTimeoutRef = useRef(null);
   const [contentWidth, setContentWidth] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [pageIndex, setPageIndex] = useState(0);
@@ -65,10 +85,15 @@ export function ReaderView({
   const [isPageContentHidden, setIsPageContentHidden] = useState(true);
   const [isPagePositioning, setIsPagePositioning] = useState(true);
   const [measuredChapterHref, setMeasuredChapterHref] = useState('');
+  const [selectedStudyText, setSelectedStudyText] = useState('');
+  const [selectionToolbarPosition, setSelectionToolbarPosition] = useState(null);
+  const [studyActionMessage, setStudyActionMessage] = useState('');
   const chapterCount = readerBook?.chapters?.length ?? 0;
+  const currentBook = readerBook?.book;
 
   useLayoutEffect(() => {
     window.clearTimeout(positioningTimeoutRef.current);
+    window.clearTimeout(studyMessageTimeoutRef.current);
     const requestedPageIndex = Math.max(0, initialPageIndex || 0);
     lastMeasuredPageCountRef.current = null;
     stablePageMeasureCountRef.current = 0;
@@ -82,7 +107,15 @@ export function ReaderView({
     setPageStep(1);
     setMaxPageOffset(0);
     setMeasuredChapterHref('');
+    setSelectedStudyText('');
+    setSelectionToolbarPosition(null);
+    setStudyActionMessage('');
   }, [chapter?.href]);
+
+  useEffect(() => () => {
+    window.clearTimeout(positioningTimeoutRef.current);
+    window.clearTimeout(studyMessageTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     const page = pageRef.current;
@@ -296,6 +329,62 @@ export function ReaderView({
     saveVisiblePage,
   ]);
 
+  const showStudyMessage = useCallback((message) => {
+    window.clearTimeout(studyMessageTimeoutRef.current);
+    setStudyActionMessage(message);
+    studyMessageTimeoutRef.current = window.setTimeout(() => {
+      setStudyActionMessage('');
+    }, 3600);
+  }, []);
+
+  const updateSelectedStudyText = useCallback(() => {
+    const selectionDetails = selectedReaderDetails(contentRef.current, stageRef.current);
+    setSelectedStudyText(selectionDetails.text);
+    setSelectionToolbarPosition(selectionDetails.position);
+    if (selectionDetails.text) {
+      setStudyActionMessage('');
+    }
+  }, []);
+
+  const openStudyTool = useCallback(async (tool) => {
+    const selectedText = cleanSelectedText(selectedStudyText);
+    const toolConfig = STUDY_TOOL_CONFIG[tool];
+    if (!selectedText || !toolConfig) {
+      showStudyMessage('Select text in the page first.');
+      return;
+    }
+
+    const isGoogleTranslate = tool === 'google';
+    const clipboardText = isGoogleTranslate
+      ? selectedText
+      : buildStudyPrompt({
+        book: currentBook,
+        chapter,
+        text: selectedText,
+      });
+    const url = isGoogleTranslate
+      ? googleTranslateURL(selectedText)
+      : toolConfig.url;
+
+    let didCopy = false;
+    try {
+      didCopy = await ClipboardSetText(clipboardText);
+    } catch (_error) {
+      didCopy = false;
+    }
+
+    try {
+      BrowserOpenURL(url);
+      showStudyMessage(didCopy
+        ? toolConfig.message
+        : `Opened ${toolConfig.label}, but could not copy text.`);
+    } catch (_error) {
+      showStudyMessage(didCopy
+        ? `Copied text, but could not open ${toolConfig.label}.`
+        : `Could not open ${toolConfig.label}.`);
+    }
+  }, [chapter, currentBook, selectedStudyText, showStudyMessage]);
+
   useEffect(() => {
     function handleKeyDown(event) {
       if (shouldIgnoreReaderShortcut(event)) {
@@ -360,7 +449,7 @@ export function ReaderView({
         />
       )}
 
-      <section className="reader-stage" aria-label="Reader">
+      <section className="reader-stage" aria-label="Reader" ref={stageRef}>
         <div className="reader-topline">
           <button
             aria-label={isTocOpen ? 'Collapse table of contents' : 'Show table of contents'}
@@ -404,7 +493,13 @@ export function ReaderView({
         </div>
 
         <article className="reader-page" aria-label={chapter.title}>
-          <div className="reader-page-frame" ref={pageRef}>
+          <div
+            className="reader-page-frame"
+            onKeyUp={updateSelectedStudyText}
+            onMouseUp={updateSelectedStudyText}
+            onTouchEnd={updateSelectedStudyText}
+            ref={pageRef}
+          >
             <div
               className={contentClassName}
               ref={contentRef}
@@ -417,6 +512,50 @@ export function ReaderView({
             />
           </div>
         </article>
+
+        {selectedStudyText && (
+          <div
+            className="reader-selection-actions"
+            role="toolbar"
+            aria-label="Selected text study actions"
+            style={selectionToolbarStyle(selectionToolbarPosition)}
+          >
+            <span>{selectedStudyText.length} chars selected</span>
+            <button
+              aria-label="Open Google Translate"
+              className="reader-study-button"
+              onClick={() => openStudyTool('google')}
+              title="Google Translate"
+              type="button"
+            >
+              <GoogleTranslateIcon />
+            </button>
+            <button
+              aria-label="Open ChatGPT"
+              className="reader-study-button"
+              onClick={() => openStudyTool('chatgpt')}
+              title="ChatGPT"
+              type="button"
+            >
+              <ChatGPTIcon />
+            </button>
+            <button
+              aria-label="Open Gemini"
+              className="reader-study-button"
+              onClick={() => openStudyTool('gemini')}
+              title="Gemini"
+              type="button"
+            >
+              <GeminiIcon />
+            </button>
+          </div>
+        )}
+
+        {studyActionMessage && (
+          <div className="reader-study-toast" role="status">
+            {studyActionMessage}
+          </div>
+        )}
 
         <div className="reader-bottom-bar" aria-label="Reader navigation">
           <div className="reader-nav-buttons">
@@ -452,6 +591,204 @@ export function ReaderView({
 
 function readerColumnCount(contentWidth) {
   return contentWidth < 680 ? 1 : 2;
+}
+
+function selectedReaderDetails(content, stage) {
+  const emptySelection = {
+    position: null,
+    text: '',
+  };
+
+  if (!content || !stage || typeof window.getSelection !== 'function') {
+    return emptySelection;
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return emptySelection;
+  }
+
+  const selectedText = cleanSelectedText(selection.toString());
+  if (!selectedText || !selectionBelongsToContent(selection, content)) {
+    return emptySelection;
+  }
+
+  return {
+    position: readerSelectionToolbarPosition(selection, stage),
+    text: selectedText,
+  };
+}
+
+function selectionBelongsToContent(selection, content) {
+  const anchorNode = selection.anchorNode;
+  const focusNode = selection.focusNode;
+  if (anchorNode && focusNode) {
+    return nodeBelongsToContent(anchorNode, content) &&
+      nodeBelongsToContent(focusNode, content);
+  }
+
+  const range = selection.getRangeAt(0);
+  return nodeBelongsToContent(range.commonAncestorContainer, content);
+}
+
+function nodeBelongsToContent(node, content) {
+  if (!node) {
+    return false;
+  }
+
+  return content === node ||
+    content.contains(node.nodeType === Node.ELEMENT_NODE ? node : node.parentNode);
+}
+
+function cleanSelectedText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+function readerSelectionToolbarPosition(selection, stage) {
+  const range = selection.getRangeAt(0);
+  const selectionRect = readerSelectionRect(range);
+  if (!selectionRect) {
+    return null;
+  }
+
+  const stageRect = stage.getBoundingClientRect();
+  const toolbarHalfWidth = Math.min(232, Math.max(142, (stageRect.width - 32) / 2));
+  const left = clampNumber(
+    selectionRect.left + (selectionRect.width / 2) - stageRect.left,
+    toolbarHalfWidth + 12,
+    stageRect.width - toolbarHalfWidth - 12,
+  );
+  const hasRoomAbove = selectionRect.top - stageRect.top >= 48;
+  const top = hasRoomAbove
+    ? selectionRect.top - stageRect.top - 10
+    : selectionRect.bottom - stageRect.top + 10;
+
+  return {
+    left: Math.round(left),
+    placement: hasRoomAbove ? 'above' : 'below',
+    top: Math.round(clampNumber(top, 52, stageRect.height - 58)),
+  };
+}
+
+function readerSelectionRect(range) {
+  const rects = Array.from(range.getClientRects()).filter((rect) => (
+    rect.width > 0 && rect.height > 0
+  ));
+  if (rects.length === 0) {
+    const rect = range.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 ? rect : null;
+  }
+
+  const firstRect = rects[0];
+  return rects.reduce((bounds, rect) => ({
+    bottom: Math.max(bounds.bottom, rect.bottom),
+    height: Math.max(bounds.bottom, rect.bottom) - Math.min(bounds.top, rect.top),
+    left: Math.min(bounds.left, rect.left),
+    right: Math.max(bounds.right, rect.right),
+    top: Math.min(bounds.top, rect.top),
+    width: Math.max(bounds.right, rect.right) - Math.min(bounds.left, rect.left),
+  }), {
+    bottom: firstRect.bottom,
+    height: firstRect.height,
+    left: firstRect.left,
+    right: firstRect.right,
+    top: firstRect.top,
+    width: firstRect.width,
+  });
+}
+
+function selectionToolbarStyle(position) {
+  if (!position) {
+    return undefined;
+  }
+
+  return {
+    bottom: 'auto',
+    left: `${position.left}px`,
+    right: 'auto',
+    top: `${position.top}px`,
+    transform: position.placement === 'above'
+      ? 'translate(-50%, -100%)'
+      : 'translate(-50%, 0)',
+  };
+}
+
+function clampNumber(value, min, max) {
+  if (max < min) {
+    return (min + max) / 2;
+  }
+
+  return Math.min(max, Math.max(min, value));
+}
+
+function googleTranslateURL(text) {
+  const selectedText = encodeURIComponent(text);
+  return `https://translate.google.com/?sl=auto&tl=vi&op=translate&text=${selectedText}`;
+}
+
+function buildStudyPrompt({book, chapter, text}) {
+  const bookTitle = book?.title || 'this book';
+  const authorText = book?.author ? ` by ${book.author}` : '';
+  const chapterTitle = chapter?.title ? `, chapter "${chapter.title}"` : '';
+
+  return [
+    `I am reading "${bookTitle}"${authorText}${chapterTitle}.`,
+    '',
+    'Selected passage:',
+    text,
+    '',
+    'Please help me study this passage:',
+    '1. Translate it naturally into Vietnamese with the book context in mind.',
+    '2. Explain important vocabulary and meanings.',
+    '3. Explain useful grammar patterns briefly.',
+    '4. Add any nuance needed to understand the passage.',
+  ].join('\n');
+}
+
+function GoogleTranslateIcon() {
+  return (
+    <svg aria-hidden="true" className="reader-brand-icon" viewBox="0 0 24 24">
+      <rect fill="#4285f4" height="14" rx="2.8" width="14" x="3" y="3" />
+      <path d="M8.2 7.3h5.1M10.8 6.1v1.2M12.4 7.3c-.5 1.7-1.8 3.3-3.9 4.6M8.2 9.7c.9 1.1 2 1.9 3.3 2.4" fill="none" stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.4" />
+      <rect fill="#ffffff" height="11" rx="2.3" stroke="#d7dce2" strokeWidth="1" width="11" x="10" y="10" />
+      <path d="M13 18l2.5-6 2.5 6M13.8 16.3h3.4" fill="none" stroke="#3c4043" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.25" />
+      <circle cx="5.8" cy="5.8" fill="#34a853" r="1.4" />
+      <circle cx="15.6" cy="4.2" fill="#fbbc04" r="1.1" />
+      <circle cx="19.5" cy="10.5" fill="#ea4335" r="1.1" />
+    </svg>
+  );
+}
+
+function ChatGPTIcon() {
+  return (
+    <svg aria-hidden="true" className="reader-brand-icon" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" fill="#10a37f" r="11" />
+      <g fill="none" stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.65">
+        <path d="M8.9 7.2a4.1 4.1 0 0 1 6.3 1.4l1.7 2.9" />
+        <path d="M15.1 7.2a4.1 4.1 0 0 1 1.9 6l-1.7 2.9" />
+        <path d="M18.1 12a4.1 4.1 0 0 1-4.4 4.6h-3.4" />
+        <path d="M15.1 16.8a4.1 4.1 0 0 1-6.3-1.4l-1.7-2.9" />
+        <path d="M8.9 16.8a4.1 4.1 0 0 1-1.9-6l1.7-2.9" />
+        <path d="M5.9 12a4.1 4.1 0 0 1 4.4-4.6h3.4" />
+        <path d="M9.2 10.3 12 8.7l2.8 1.6v3.3L12 15.3l-2.8-1.7z" />
+      </g>
+    </svg>
+  );
+}
+
+function GeminiIcon() {
+  return (
+    <svg aria-hidden="true" className="reader-brand-icon" viewBox="0 0 24 24">
+      <defs>
+        <linearGradient id="reader-gemini-gradient" x1="4" x2="20" y1="20" y2="4" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#4c8bf5" />
+          <stop offset="0.48" stopColor="#8e75ff" />
+          <stop offset="1" stopColor="#c36bff" />
+        </linearGradient>
+      </defs>
+      <path d="M12 2.8c.7 5.1 4.1 8.5 9.2 9.2-5.1.7-8.5 4.1-9.2 9.2-.7-5.1-4.1-8.5-9.2-9.2 5.1-.7 8.5-4.1 9.2-9.2z" fill="url(#reader-gemini-gradient)" />
+    </svg>
+  );
 }
 
 function readerColumnGap(contentWidth) {
