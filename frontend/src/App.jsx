@@ -52,11 +52,13 @@ function App() {
         isImporting={library.isImporting}
         isLoading={library.isLoading}
         isRemoving={library.isRemoving}
+        isSavingPrompt={library.isSavingPrompt}
         onCloseBook={() => library.setActiveBook(null)}
         onImport={library.importBook}
         onOpenBook={library.openBook}
         onReadBook={reader.openReader}
         onRemoveBook={library.removeBook}
+        onSavePrompt={library.saveBookPrompt}
         visibleBooks={library.visibleBooks}
       />
     </main>

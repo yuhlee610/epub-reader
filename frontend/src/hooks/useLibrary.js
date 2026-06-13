@@ -4,6 +4,7 @@ import {
   GetBook,
   ImportEPUB,
   ListBooks,
+  SaveBookPrompt,
 } from '../../wailsjs/go/main/App';
 import {formatImportError} from '../lib/bookFormatters';
 
@@ -17,6 +18,7 @@ export function useLibrary() {
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -109,6 +111,35 @@ export function useLibrary() {
     }
   }
 
+  async function saveBookPrompt(book, customPrompt) {
+    if (!book?.id) {
+      return;
+    }
+
+    setIsSavingPrompt(true);
+    clearNotice();
+
+    try {
+      const trimmedPrompt = String(customPrompt || '').trim();
+      const updatedBook = await SaveBookPrompt(book.id, {
+        customPrompt: trimmedPrompt,
+      });
+
+      setBooks((currentBooks) => currentBooks.map((currentBook) => (
+        currentBook.id === updatedBook.id ? updatedBook : currentBook
+      )));
+      setActiveBook((currentBook) => (
+        currentBook?.id === updatedBook.id ? updatedBook : currentBook
+      ));
+      setMessage(trimmedPrompt ? 'Study prompt saved.' : 'Study prompt reset to default.');
+    } catch (err) {
+      setError(err?.message ?? String(err));
+      throw err;
+    } finally {
+      setIsSavingPrompt(false);
+    }
+  }
+
   function clearNotice() {
     setMessage('');
     setError('');
@@ -153,10 +184,12 @@ export function useLibrary() {
     isImporting,
     isLoading,
     isRemoving,
+    isSavingPrompt,
     message,
     openBook,
     query,
     removeBook,
+    saveBookPrompt,
     loadBooks,
     setActiveBook,
     setQuery,

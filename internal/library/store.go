@@ -243,6 +243,33 @@ func (s *Store) UpdateReaderAppearance(id string, appearance ReaderAppearance) (
 	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
 }
 
+// UpdatePromptConfig stores translation and study prompt preferences for one
+// book. An empty custom prompt resets the book to the default study prompt.
+func (s *Store) UpdatePromptConfig(id string, prompt PromptConfig) (BookMetadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := s.readLibrary()
+	if err != nil {
+		return BookMetadata{}, err
+	}
+
+	for i := range file.Books {
+		if file.Books[i].ID != strings.TrimSpace(id) {
+			continue
+		}
+
+		file.Books[i].Prompt = normalizePromptConfig(prompt, s.timeProvider())
+		if err := s.writeLibrary(file); err != nil {
+			return BookMetadata{}, err
+		}
+
+		return file.Books[i], nil
+	}
+
+	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
+}
+
 // prepareBook normalizes and validates metadata before it is written to disk.
 func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMetadata, error) {
 	var err error
@@ -306,8 +333,28 @@ func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMeta
 		book.Appearance = existing.Appearance
 	}
 	book.Appearance = normalizeReaderAppearance(book.Appearance)
+	if existing != nil && isZeroPromptConfig(book.Prompt) {
+		book.Prompt = existing.Prompt
+	}
+	promptUpdatedAt := book.Prompt.UpdatedAt
+	if promptUpdatedAt.IsZero() {
+		promptUpdatedAt = s.timeProvider()
+	}
+	book.Prompt = normalizePromptConfig(book.Prompt, promptUpdatedAt)
 
 	return book, nil
+}
+
+func normalizePromptConfig(prompt PromptConfig, updatedAt time.Time) PromptConfig {
+	customPrompt := strings.TrimSpace(prompt.CustomPrompt)
+	if customPrompt == "" {
+		return PromptConfig{}
+	}
+
+	return PromptConfig{
+		CustomPrompt: customPrompt,
+		UpdatedAt:    updatedAt,
+	}
 }
 
 func normalizeReaderAppearance(appearance ReaderAppearance) ReaderAppearance {
@@ -335,4 +382,8 @@ func normalizeReaderAppearance(appearance ReaderAppearance) ReaderAppearance {
 
 func isZeroReaderAppearance(appearance ReaderAppearance) bool {
 	return strings.TrimSpace(appearance.BackgroundColor) == "" && appearance.FontSize == 0
+}
+
+func isZeroPromptConfig(prompt PromptConfig) bool {
+	return strings.TrimSpace(prompt.CustomPrompt) == "" && prompt.UpdatedAt.IsZero()
 }

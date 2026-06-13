@@ -111,15 +111,17 @@ func TestSaveBookUpdatePreservesImportedAtWhenOmitted(t *testing.T) {
 	book, err := store.SaveBook(BookMetadata{
 		Title:            "Cradle",
 		OriginalFileName: "cradle.epub",
+		Prompt: PromptConfig{
+			CustomPrompt: "Translate with sacred arts context.",
+		},
 	})
 	if err != nil {
 		t.Fatalf("initial SaveBook() error = %v", err)
 	}
 
 	updated, err := store.SaveBook(BookMetadata{
-		ID:     book.ID,
-		Title:  "Cradle",
-		Prompt: PromptConfig{CustomPrompt: "Explain vocabulary."},
+		ID:    book.ID,
+		Title: "Cradle",
 	})
 	if err != nil {
 		t.Fatalf("update SaveBook() error = %v", err)
@@ -129,6 +131,9 @@ func TestSaveBookUpdatePreservesImportedAtWhenOmitted(t *testing.T) {
 	}
 	if updated.FilePath != book.FilePath {
 		t.Fatalf("FilePath = %q, want preserved %q", updated.FilePath, book.FilePath)
+	}
+	if updated.Prompt.CustomPrompt != book.Prompt.CustomPrompt {
+		t.Fatalf("Prompt.CustomPrompt = %q, want preserved %q", updated.Prompt.CustomPrompt, book.Prompt.CustomPrompt)
 	}
 }
 
@@ -251,5 +256,55 @@ func TestUpdateReaderAppearancePersists(t *testing.T) {
 	}
 	if got.Appearance != updated.Appearance {
 		t.Fatalf("persisted Appearance = %#v, want %#v", got.Appearance, updated.Appearance)
+	}
+}
+
+// TestUpdatePromptConfigPersistsAndResets verifies per-book prompts survive
+// reloads and can be reset to the default prompt.
+func TestUpdatePromptConfigPersistsAndResets(t *testing.T) {
+	store := newTestStore(t)
+
+	book, err := store.SaveBook(BookMetadata{
+		Title:            "Cradle",
+		OriginalFileName: "cradle.epub",
+	})
+	if err != nil {
+		t.Fatalf("SaveBook() error = %v", err)
+	}
+
+	updated, err := store.UpdatePromptConfig(book.ID, PromptConfig{
+		CustomPrompt: "  Translate naturally and explain advancement terms.  ",
+	})
+	if err != nil {
+		t.Fatalf("UpdatePromptConfig() error = %v", err)
+	}
+	if updated.Prompt.CustomPrompt != "Translate naturally and explain advancement terms." {
+		t.Fatalf("CustomPrompt = %q, want trimmed custom prompt", updated.Prompt.CustomPrompt)
+	}
+	if !updated.Prompt.UpdatedAt.Equal(store.timeProvider()) {
+		t.Fatalf("UpdatedAt = %s, want store timestamp %s", updated.Prompt.UpdatedAt, store.timeProvider())
+	}
+
+	reloaded, err := NewStore(store.Info().RootDir)
+	if err != nil {
+		t.Fatalf("reload NewStore() error = %v", err)
+	}
+	got, err := reloaded.GetBook(book.ID)
+	if err != nil {
+		t.Fatalf("GetBook() error = %v", err)
+	}
+	if got.Prompt != updated.Prompt {
+		t.Fatalf("persisted Prompt = %#v, want %#v", got.Prompt, updated.Prompt)
+	}
+
+	reset, err := store.UpdatePromptConfig(book.ID, PromptConfig{CustomPrompt: "   "})
+	if err != nil {
+		t.Fatalf("reset UpdatePromptConfig() error = %v", err)
+	}
+	if reset.Prompt.CustomPrompt != "" {
+		t.Fatalf("reset CustomPrompt = %q, want empty default prompt marker", reset.Prompt.CustomPrompt)
+	}
+	if !reset.Prompt.UpdatedAt.IsZero() {
+		t.Fatalf("reset UpdatedAt = %s, want zero time", reset.Prompt.UpdatedAt)
 	}
 }

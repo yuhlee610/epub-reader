@@ -160,6 +160,16 @@ func (a *App) SaveReaderAppearance(id string, appearance library.ReaderAppearanc
 	return store.UpdateReaderAppearance(id, appearance)
 }
 
+// SaveBookPrompt persists translation and study prompt preferences for one book.
+func (a *App) SaveBookPrompt(id string, prompt library.PromptConfig) (library.BookMetadata, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.BookMetadata{}, err
+	}
+
+	return store.UpdatePromptConfig(id, prompt)
+}
+
 // SaveBookMetadata creates or updates one book metadata record.
 func (a *App) SaveBookMetadata(book library.BookMetadata) (library.BookMetadata, error) {
 	store, err := a.libraryStore()

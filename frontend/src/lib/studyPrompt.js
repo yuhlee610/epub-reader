@@ -1,4 +1,4 @@
-const DEFAULT_STUDY_INSTRUCTIONS = [
+export const DEFAULT_STUDY_INSTRUCTIONS = [
   'Translate naturally into Vietnamese with the book context in mind.',
   'List important vocabulary from the selected text with short meanings.',
   'Explain useful grammar patterns briefly.',
@@ -12,7 +12,7 @@ export function buildBookAwareStudyPrompt({book, chapter, text}) {
   const bookTitle = cleanPromptText(book?.title) || 'the current book';
   const author = cleanPromptText(book?.author);
   const chapterTitle = cleanPromptText(chapter?.title);
-  const activePrompt = cleanPromptText(book?.prompt?.customPrompt) || DEFAULT_STUDY_INSTRUCTIONS;
+  const activePrompt = cleanPromptBlock(book?.prompt?.customPrompt) || DEFAULT_STUDY_INSTRUCTIONS;
   const preparedText = selectedText.length > MAX_SELECTED_TEXT_LENGTH
     ? `${selectedText.slice(0, MAX_SELECTED_TEXT_LENGTH).trim()}\n\n[Selected text truncated for prompt length.]`
     : selectedText;
@@ -41,4 +41,8 @@ export function buildBookAwareStudyPrompt({book, chapter, text}) {
 
 function cleanPromptText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function cleanPromptBlock(value) {
+  return String(value || '').replace(/\r\n/g, '\n').trim();
 }

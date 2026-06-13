@@ -71,6 +71,8 @@
 
 .toolbar-icon:disabled,
 .book-remove-button:disabled,
+.panel-primary:disabled,
+.panel-secondary:disabled,
 .panel-danger:disabled {
     cursor: not-allowed;
     opacity: 0.45;
@@ -453,6 +455,7 @@
 }
 
 .panel-primary,
+.panel-secondary,
 .panel-danger {
     display: inline-flex;
     align-items: center;
@@ -473,8 +476,17 @@
     color: #ffffff;
 }
 
-.panel-primary:hover {
+.panel-primary:not(:disabled):hover {
     background: #000000;
+}
+
+.panel-secondary {
+    background: #e9e9e9;
+    color: #333333;
+}
+
+.panel-secondary:not(:disabled):hover {
+    background: #dedede;
 }
 
 .panel-danger {
@@ -482,8 +494,62 @@
     color: #7a281b;
 }
 
-.panel-danger:hover {
+.panel-danger:not(:disabled):hover {
     background: #e8c9c4;
+}
+
+.panel-prompt-section {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #e4e4e4;
+}
+
+.panel-prompt-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.panel-prompt-heading h2 {
+    margin: 0;
+    color: #555555;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.panel-prompt-heading span {
+    color: #777777;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.panel-prompt-input {
+    width: 100%;
+    min-height: 156px;
+    padding: 8px;
+    border: 1px solid #d8d8d8;
+    border-radius: 6px;
+    box-sizing: border-box;
+    background: #ffffff;
+    color: #222222;
+    font: 0.78rem/1.35 Arial, Helvetica, sans-serif;
+    resize: vertical;
+}
+
+.panel-prompt-input:focus {
+    border-color: #9c9c9c;
+    outline: 2px solid #d8d8d8;
+    outline-offset: 1px;
+}
+
+.panel-prompt-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .reader-loading {

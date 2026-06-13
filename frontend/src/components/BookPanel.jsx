@@ -1,3 +1,4 @@
+import {useEffect, useState} from 'react';
 import {BookOpen, Trash2, X} from 'lucide-react';
 import {
   coverTitle,
@@ -5,13 +6,50 @@ import {
   formatImportedAt,
   progressLabel,
 } from '../lib/bookFormatters';
+import {DEFAULT_STUDY_INSTRUCTIONS} from '../lib/studyPrompt';
 
-export function BookPanel({book, isRemoving, onClose, onOpen, onRemove}) {
+export function BookPanel({
+  book,
+  isRemoving,
+  isSavingPrompt,
+  onClose,
+  onOpen,
+  onRemove,
+  onSavePrompt,
+}) {
+  const [promptValue, setPromptValue] = useState(DEFAULT_STUDY_INSTRUCTIONS);
+  const savedPrompt = String(book?.prompt?.customPrompt || '').trim();
+
+  useEffect(() => {
+    setPromptValue(savedPrompt || DEFAULT_STUDY_INSTRUCTIONS);
+  }, [book?.id, savedPrompt]);
+
   if (!book) {
     return null;
   }
 
   const title = book.title || 'Untitled book';
+  const activePrompt = savedPrompt || DEFAULT_STUDY_INSTRUCTIONS;
+  const hasCustomPrompt = savedPrompt.length > 0;
+  const isPromptDirty = promptValue.trim() !== activePrompt.trim();
+  const isPromptActionDisabled = isSavingPrompt || !onSavePrompt;
+
+  async function handleSavePrompt() {
+    try {
+      await onSavePrompt?.(book, promptValue);
+    } catch (_err) {
+      // The library hook owns the visible error notification.
+    }
+  }
+
+  async function handleResetPrompt() {
+    try {
+      await onSavePrompt?.(book, '');
+      setPromptValue(DEFAULT_STUDY_INSTRUCTIONS);
+    } catch (_err) {
+      // The library hook owns the visible error notification.
+    }
+  }
 
   return (
     <aside className="book-panel" aria-label="Selected book">
@@ -60,6 +98,37 @@ export function BookPanel({book, isRemoving, onClose, onOpen, onRemove}) {
           Remove
         </button>
       </div>
+      <section className="panel-prompt-section" aria-label="AI study prompt">
+        <div className="panel-prompt-heading">
+          <h2>AI study prompt</h2>
+          <span>{hasCustomPrompt ? 'Custom' : 'Default'}</span>
+        </div>
+        <textarea
+          aria-label={`AI study prompt for ${title}`}
+          className="panel-prompt-input"
+          value={promptValue}
+          onChange={(event) => setPromptValue(event.target.value)}
+          spellCheck="false"
+        />
+        <div className="panel-prompt-actions">
+          <button
+            className="panel-primary"
+            type="button"
+            onClick={handleSavePrompt}
+            disabled={isPromptActionDisabled || !isPromptDirty}
+          >
+            Save prompt
+          </button>
+          <button
+            className="panel-secondary"
+            type="button"
+            onClick={handleResetPrompt}
+            disabled={isPromptActionDisabled || (!hasCustomPrompt && !isPromptDirty)}
+          >
+            Reset
+          </button>
+        </div>
+      </section>
     </aside>
   );
 }

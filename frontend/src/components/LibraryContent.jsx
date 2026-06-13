@@ -8,11 +8,13 @@ export function LibraryContent({
   isImporting,
   isLoading,
   isRemoving,
+  isSavingPrompt,
   onCloseBook,
   onImport,
   onOpenBook,
   onReadBook,
   onRemoveBook,
+  onSavePrompt,
   visibleBooks,
 }) {
   if (isLoading) {
@@ -60,9 +62,11 @@ export function LibraryContent({
         <BookPanel
           book={activeBook}
           isRemoving={isRemoving}
+          isSavingPrompt={isSavingPrompt}
           onClose={onCloseBook}
           onOpen={onReadBook}
           onRemove={onRemoveBook}
+          onSavePrompt={onSavePrompt}
         />
       </div>
     </section>
