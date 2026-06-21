@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"epub-reader/internal/library"
 
@@ -12,10 +13,13 @@ import (
 
 // App owns the Wails-facing application state.
 type App struct {
-	ctx          context.Context
-	store        *library.Store
-	storeErr     error
-	openEPUBFile func(context.Context) (string, error)
+	ctx                     context.Context
+	store                   *library.Store
+	storeErr                error
+	openEPUBFile            func(context.Context) (string, error)
+	httpClient              *http.Client
+	geminiEndpoint          string
+	googleTranslateEndpoint string
 }
 
 // ImportEPUBResult describes the UI-facing result of an import attempt.

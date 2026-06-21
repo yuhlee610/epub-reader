@@ -32,8 +32,19 @@ type ReadingProgress struct {
 
 // PromptConfig stores per-book translation and study prompt settings.
 type PromptConfig struct {
-	CustomPrompt string    `json:"customPrompt,omitempty"`
-	UpdatedAt    time.Time `json:"updatedAt,omitempty"`
+	CustomPrompt string        `json:"customPrompt,omitempty"`
+	Prompts      []StudyPrompt `json:"prompts,omitempty"`
+	UpdatedAt    time.Time     `json:"updatedAt,omitempty"`
+}
+
+// StudyPrompt is one book-specific Gemini prompt action shown in the reader.
+type StudyPrompt struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ShortLabel  string `json:"shortLabel"`
+	Instruction string `json:"instruction"`
+	SortOrder   int    `json:"sortOrder"`
+	IsDefault   bool   `json:"isDefault,omitempty"`
 }
 
 // ReaderAppearance stores reading comfort preferences for a book.

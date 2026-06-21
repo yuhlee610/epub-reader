@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Bookmark,
   ChevronLeft,
@@ -17,13 +18,17 @@ import {
 } from 'lucide-react';
 import {
   BrowserOpenURL,
-  ClipboardSetText,
+  EventsOn,
   Quit,
   WindowMinimise,
   WindowToggleMaximise,
 } from '../../wailsjs/runtime/runtime';
+import {
+  StreamGeminiStudyPrompt,
+  TranslateSelectedText,
+} from '../../wailsjs/go/main/App';
 import {coverTitle} from '../lib/bookFormatters';
-import {buildBookAwareStudyPrompt} from '../lib/studyPrompt';
+import remarkGfm from 'remark-gfm';
 
 const LAST_PAGE_REQUEST_THRESHOLD = Number.MAX_SAFE_INTEGER / 2;
 const DEFAULT_READER_APPEARANCE = {
@@ -41,17 +46,31 @@ const READER_FONT_SIZE_OPTIONS = [16, 18, 20, 22, 24];
 const STUDY_TOOL_CONFIG = {
   google: {
     label: 'Google Translate',
-    message: 'Copied selected text and opened Google Translate.',
   },
-  chatgpt: {
-    label: 'ChatGPT',
-    message: 'Copied a book-aware study prompt and opened ChatGPT.',
-    url: 'https://chatgpt.com/',
+};
+const GEMINI_STREAM_EVENT = 'gemini:study-stream';
+const GEMINI_MARKDOWN_COMPONENTS = {
+  a({children, href, node: _node, ...props}) {
+    function handleClick(event) {
+      if (!href) {
+        return;
+      }
+      event.preventDefault();
+      BrowserOpenURL(href);
+    }
+
+    return (
+      <a href={href} onClick={handleClick} rel="noreferrer" target="_blank" {...props}>
+        {children}
+      </a>
+    );
   },
-  gemini: {
-    label: 'Gemini',
-    message: 'Copied a book-aware study prompt and opened Gemini.',
-    url: 'https://gemini.google.com/app',
+  table({children, node: _node, ...props}) {
+    return (
+      <div className="reader-gemini-table-wrap">
+        <table {...props}>{children}</table>
+      </div>
+    );
   },
 };
 
@@ -89,6 +108,9 @@ export function ReaderView({
   const [selectedStudyText, setSelectedStudyText] = useState('');
   const [selectionToolbarPosition, setSelectionToolbarPosition] = useState(null);
   const [studyActionMessage, setStudyActionMessage] = useState('');
+  const [geminiResponse, setGeminiResponse] = useState(null);
+  const [geminiError, setGeminiError] = useState('');
+  const [activeGeminiPromptID, setActiveGeminiPromptID] = useState('');
   const chapterCount = readerBook?.chapters?.length ?? 0;
   const currentBook = readerBook?.book;
 
@@ -111,6 +133,8 @@ export function ReaderView({
     setSelectedStudyText('');
     setSelectionToolbarPosition(null);
     setStudyActionMessage('');
+    setGeminiError('');
+    setActiveGeminiPromptID('');
   }, [chapter?.href]);
 
   useEffect(() => () => {
@@ -347,44 +371,154 @@ export function ReaderView({
     }
   }, []);
 
-  const openStudyTool = useCallback(async (tool) => {
+  const openGoogleTranslate = useCallback(async (prompt = null) => {
     const selectedText = cleanSelectedText(selectedStudyText);
-    const toolConfig = STUDY_TOOL_CONFIG[tool];
-    if (!selectedText || !toolConfig) {
+    const toolConfig = STUDY_TOOL_CONFIG.google;
+    if (!selectedText) {
       showStudyMessage('Select text in the page first.');
       return;
     }
 
-    const isGoogleTranslate = tool === 'google';
-    const clipboardText = isGoogleTranslate
-      ? selectedText
-      : buildBookAwareStudyPrompt({
-        book: currentBook,
-        chapter,
+    setGeminiResponse({
+      providerLabel: toolConfig.label,
+      promptName: prompt?.name || 'Translate',
+      textPreview: selectedTextPreview(selectedText),
+      text: '',
+      isLoading: true,
+      isPlainText: true,
+    });
+    setGeminiError('');
+    setActiveGeminiPromptID(prompt?.id || 'google-translate');
+
+    try {
+      const response = await TranslateSelectedText({
         text: selectedText,
+        sourceLanguage: 'auto',
+        targetLanguage: 'vi',
       });
-    const url = isGoogleTranslate
-      ? googleTranslateURL(selectedText)
-      : toolConfig.url;
+      setGeminiResponse({
+        providerLabel: toolConfig.label,
+        promptName: prompt?.name || 'Translate',
+        textPreview: response.textPreview || selectedTextPreview(selectedText),
+        text: response.translatedText || '',
+        sourceLanguage: response.sourceLanguage,
+        targetLanguage: response.targetLanguage,
+        isLoading: false,
+        isPlainText: true,
+      });
+    } catch (error) {
+      setGeminiError(error?.message ?? String(error));
+      setGeminiResponse((current) => ({
+        ...(current || {}),
+        providerLabel: toolConfig.label,
+        promptName: prompt?.name || 'Translate',
+        textPreview: selectedTextPreview(selectedText),
+        text: current?.text || '',
+        isLoading: false,
+        isPlainText: true,
+      }));
+    } finally {
+      setActiveGeminiPromptID('');
+    }
+  }, [selectedStudyText, showStudyMessage]);
 
-    let didCopy = false;
-    try {
-      didCopy = await ClipboardSetText(clipboardText);
-    } catch (_error) {
-      didCopy = false;
+  const runGeminiPrompt = useCallback(async (prompt) => {
+    const selectedText = cleanSelectedText(selectedStudyText);
+    if (!selectedText) {
+      showStudyMessage('Select text in the page first.');
+      return;
+    }
+    if (!currentBook?.id || !prompt?.id) {
+      showStudyMessage('No Gemini prompt is configured for this book.');
+      return;
     }
 
+    const requestID = geminiRequestID();
+    setGeminiResponse({
+      requestId: requestID,
+      promptName: prompt.name || 'Gemini',
+      textPreview: selectedTextPreview(selectedText),
+      text: '',
+      isLoading: true,
+    });
+    setGeminiError('');
+    setActiveGeminiPromptID(prompt.id);
+
+    const stopListening = EventsOn(GEMINI_STREAM_EVENT, (event) => {
+      if (!event || event.requestId !== requestID) {
+        return;
+      }
+
+      if (event.type === 'chunk') {
+        setGeminiResponse((current) => {
+          if (!current || current.requestId !== requestID) {
+            return current;
+          }
+          return {
+            ...current,
+            text: `${current.text || ''}${event.text || ''}`,
+            isLoading: true,
+          };
+        });
+        return;
+      }
+
+      if (event.type === 'done') {
+        setGeminiResponse((current) => {
+          if (!current || current.requestId !== requestID) {
+            return current;
+          }
+          return {
+            ...current,
+            text: event.text ?? current.text ?? '',
+            isLoading: false,
+          };
+        });
+        return;
+      }
+
+      if (event.type === 'error') {
+        setGeminiError(event.error || 'Gemini stream failed.');
+        setGeminiResponse((current) => {
+          if (!current || current.requestId !== requestID) {
+            return current;
+          }
+          return {
+            ...current,
+            isLoading: false,
+          };
+        });
+      }
+    });
+
     try {
-      BrowserOpenURL(url);
-      showStudyMessage(didCopy
-        ? toolConfig.message
-        : `Opened ${toolConfig.label}, but could not copy text.`);
-    } catch (_error) {
-      showStudyMessage(didCopy
-        ? `Copied text, but could not open ${toolConfig.label}.`
-        : `Could not open ${toolConfig.label}.`);
+      const response = await StreamGeminiStudyPrompt({
+        requestId: requestID,
+        bookId: currentBook.id,
+        promptId: prompt.id,
+        selectedText,
+        chapterTitle: chapter?.title || '',
+      });
+      setGeminiResponse({
+        ...response,
+        requestId: requestID,
+        isLoading: false,
+      });
+    } catch (error) {
+      setGeminiError(error?.message ?? String(error));
+      setGeminiResponse((current) => ({
+        ...(current || {}),
+        requestId: requestID,
+        promptName: prompt.name || 'Gemini',
+        textPreview: selectedTextPreview(selectedText),
+        text: current?.text || '',
+        isLoading: false,
+      }));
+    } finally {
+      stopListening();
+      setActiveGeminiPromptID('');
     }
-  }, [chapter, currentBook, selectedStudyText, showStudyMessage]);
+  }, [chapter?.title, currentBook?.id, selectedStudyText, showStudyMessage]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -423,6 +557,12 @@ export function ReaderView({
   const columnWidth = readerColumnWidth(contentWidth);
   const pageOffset = Math.min(pageIndex * pageStep, maxPageOffset);
   const appearance = normalizeReaderAppearance(readerBook.book.appearance);
+  const studyPrompts = normalizeStudyPrompts(currentBook?.prompt?.prompts);
+  const translationPrompts = studyPrompts.filter(isTranslationPrompt);
+  const geminiPrompts = studyPrompts.filter((prompt) => !isTranslationPrompt(prompt));
+  const googleTranslateActions = translationPrompts.length > 0
+    ? translationPrompts
+    : [{id: 'google-translate', name: 'Translate', shortLabel: 'TR'}];
   const contentClassName = [
     'reader-chapter-content',
     isPagePositioning ? 'is-positioning' : '',
@@ -522,34 +662,46 @@ export function ReaderView({
             style={selectionToolbarStyle(selectionToolbarPosition)}
           >
             <span>{selectedStudyText.length} chars selected</span>
-            <button
-              aria-label="Open Google Translate"
-              className="reader-study-button"
-              onClick={() => openStudyTool('google')}
-              title="Google Translate"
-              type="button"
-            >
-              <GoogleTranslateIcon />
-            </button>
-            <button
-              aria-label="Open ChatGPT"
-              className="reader-study-button"
-              onClick={() => openStudyTool('chatgpt')}
-              title="ChatGPT"
-              type="button"
-            >
-              <ChatGPTIcon />
-            </button>
-            <button
-              aria-label="Open Gemini"
-              className="reader-study-button"
-              onClick={() => openStudyTool('gemini')}
-              title="Gemini"
-              type="button"
-            >
-              <GeminiIcon />
-            </button>
+            {googleTranslateActions.map((prompt) => (
+              <button
+                aria-label="Translate selected text with Google Translate"
+                className="reader-study-button reader-gemini-prompt-button"
+                disabled={activeGeminiPromptID === prompt.id}
+                key={prompt.id}
+                onClick={() => openGoogleTranslate(prompt)}
+                title="Translate selected text in app"
+                type="button"
+              >
+                <GoogleTranslateIcon />
+                <span>{prompt.shortLabel}</span>
+              </button>
+            ))}
+            {geminiPrompts.map((prompt) => (
+              <button
+                aria-label={`Run ${prompt.name} with Gemini`}
+                className="reader-study-button reader-gemini-prompt-button"
+                disabled={activeGeminiPromptID === prompt.id}
+                key={prompt.id}
+                onClick={() => runGeminiPrompt(prompt)}
+                title={`Send selected text to Gemini with ${prompt.name}`}
+                type="button"
+              >
+                <GeminiIcon />
+                <span>{prompt.shortLabel}</span>
+              </button>
+            ))}
           </div>
+        )}
+
+        {geminiResponse && (
+          <GeminiResponseDialog
+            error={geminiError}
+            response={geminiResponse}
+            onClose={() => {
+              setGeminiResponse(null);
+              setGeminiError('');
+            }}
+          />
         )}
 
         {studyActionMessage && (
@@ -722,11 +874,6 @@ function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function googleTranslateURL(text) {
-  const selectedText = encodeURIComponent(text);
-  return `https://translate.google.com/?sl=auto&tl=vi&op=translate&text=${selectedText}`;
-}
-
 function GoogleTranslateIcon() {
   return (
     <svg aria-hidden="true" className="reader-brand-icon" viewBox="0 0 24 24">
@@ -737,23 +884,6 @@ function GoogleTranslateIcon() {
       <circle cx="5.8" cy="5.8" fill="#34a853" r="1.4" />
       <circle cx="15.6" cy="4.2" fill="#fbbc04" r="1.1" />
       <circle cx="19.5" cy="10.5" fill="#ea4335" r="1.1" />
-    </svg>
-  );
-}
-
-function ChatGPTIcon() {
-  return (
-    <svg aria-hidden="true" className="reader-brand-icon" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" fill="#10a37f" r="11" />
-      <g fill="none" stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.65">
-        <path d="M8.9 7.2a4.1 4.1 0 0 1 6.3 1.4l1.7 2.9" />
-        <path d="M15.1 7.2a4.1 4.1 0 0 1 1.9 6l-1.7 2.9" />
-        <path d="M18.1 12a4.1 4.1 0 0 1-4.4 4.6h-3.4" />
-        <path d="M15.1 16.8a4.1 4.1 0 0 1-6.3-1.4l-1.7-2.9" />
-        <path d="M8.9 16.8a4.1 4.1 0 0 1-1.9-6l1.7-2.9" />
-        <path d="M5.9 12a4.1 4.1 0 0 1 4.4-4.6h3.4" />
-        <path d="M9.2 10.3 12 8.7l2.8 1.6v3.3L12 15.3l-2.8-1.7z" />
-      </g>
     </svg>
   );
 }
@@ -771,6 +901,110 @@ function GeminiIcon() {
       <path d="M12 2.8c.7 5.1 4.1 8.5 9.2 9.2-5.1.7-8.5 4.1-9.2 9.2-.7-5.1-4.1-8.5-9.2-9.2 5.1-.7 8.5-4.1 9.2-9.2z" fill="url(#reader-gemini-gradient)" />
     </svg>
   );
+}
+
+function GeminiResponseDialog({error, response, onClose}) {
+  const responseText = String(response.text || '');
+  const providerLabel = response.providerLabel || 'Gemini response';
+  const loadingLabel = response.providerLabel === STUDY_TOOL_CONFIG.google.label
+    ? 'Translating...'
+    : 'Asking Gemini...';
+  const streamingLabel = response.providerLabel === STUDY_TOOL_CONFIG.google.label
+    ? ''
+    : 'Gemini is still writing...';
+
+  return (
+    <div className="reader-gemini-backdrop" role="presentation">
+      <section
+        aria-label={`${providerLabel} response`}
+        aria-live="polite"
+        className="reader-gemini-dialog"
+        role="dialog"
+      >
+        <div className="reader-gemini-dialog-header">
+          <div>
+            <span>{providerLabel}</span>
+            <h2>{response.promptName || 'Study prompt'}</h2>
+          </div>
+          <button
+            aria-label={`Close ${providerLabel} response`}
+            className="reader-icon-button"
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" size={17} strokeWidth={2} />
+          </button>
+        </div>
+        {response.textPreview && (
+          <p className="reader-gemini-preview">{response.textPreview}</p>
+        )}
+        {response.isLoading && !responseText ? (
+          <div className="reader-gemini-state" role="status">
+            {loadingLabel}
+          </div>
+        ) : (
+          <div className="reader-gemini-response-shell">
+            {responseText && response.isPlainText ? (
+              <p className="reader-gemini-response reader-translation-text">{responseText}</p>
+            ) : responseText ? (
+              <ReactMarkdown
+                className="reader-gemini-response"
+                components={GEMINI_MARKDOWN_COMPONENTS}
+                remarkPlugins={[remarkGfm]}
+                skipHtml
+              >
+                {responseText}
+              </ReactMarkdown>
+            ) : null}
+            {response.sourceLanguage && response.targetLanguage && (
+              <p className="reader-translation-meta">
+                {response.sourceLanguage.toUpperCase()} to {response.targetLanguage.toUpperCase()}
+              </p>
+            )}
+            {response.isLoading && streamingLabel && (
+              <div className="reader-gemini-state is-streaming" role="status">
+                {streamingLabel}
+              </div>
+            )}
+            {error && (
+              <div className="reader-gemini-error" role="alert">
+                {error}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function normalizeStudyPrompts(prompts) {
+  return (prompts ?? [])
+    .map((prompt) => ({
+      id: String(prompt?.id || '').trim(),
+      name: String(prompt?.name || 'Gemini prompt').trim(),
+      shortLabel: String(prompt?.shortLabel || 'AI').trim().toUpperCase().slice(0, 4),
+    }))
+    .filter((prompt) => prompt.id);
+}
+
+function isTranslationPrompt(prompt) {
+  const id = String(prompt?.id || '').trim().toLowerCase();
+  const name = String(prompt?.name || '').trim().toLowerCase();
+  return id === 'translate' || name === 'translate' || name.includes('translation');
+}
+
+function selectedTextPreview(value) {
+  const text = cleanSelectedText(value);
+  return text.length > 180 ? `${text.slice(0, 180).trim()}...` : text;
+}
+
+function geminiRequestID() {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `gemini-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function readerColumnGap(contentWidth) {

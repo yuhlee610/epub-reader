@@ -111,7 +111,7 @@ export function useLibrary() {
     }
   }
 
-  async function saveBookPrompt(book, customPrompt) {
+  async function saveBookPrompts(book, prompts) {
     if (!book?.id) {
       return;
     }
@@ -120,9 +120,8 @@ export function useLibrary() {
     clearNotice();
 
     try {
-      const trimmedPrompt = String(customPrompt || '').trim();
       const updatedBook = await SaveBookPrompt(book.id, {
-        customPrompt: trimmedPrompt,
+        prompts: normalizePromptPayload(prompts),
       });
 
       setBooks((currentBooks) => currentBooks.map((currentBook) => (
@@ -131,7 +130,7 @@ export function useLibrary() {
       setActiveBook((currentBook) => (
         currentBook?.id === updatedBook.id ? updatedBook : currentBook
       ));
-      setMessage(trimmedPrompt ? 'Study prompt saved.' : 'Study prompt reset to default.');
+      setMessage('Study prompts saved.');
     } catch (err) {
       setError(err?.message ?? String(err));
       throw err;
@@ -176,6 +175,17 @@ export function useLibrary() {
     });
   }, [books, query]);
 
+  function normalizePromptPayload(prompts) {
+    return (prompts ?? []).map((prompt, index) => ({
+      id: String(prompt?.id || '').trim(),
+      name: String(prompt?.name || '').trim(),
+      shortLabel: String(prompt?.shortLabel || '').trim(),
+      instruction: String(prompt?.instruction || '').trim(),
+      sortOrder: Number.isFinite(Number(prompt?.sortOrder)) ? Number(prompt.sortOrder) : index,
+      isDefault: Boolean(prompt?.isDefault),
+    }));
+  }
+
   return {
     activeBook,
     books,
@@ -189,7 +199,8 @@ export function useLibrary() {
     openBook,
     query,
     removeBook,
-    saveBookPrompt,
+    saveBookPrompt: saveBookPrompts,
+    saveBookPrompts,
     loadBooks,
     setActiveBook,
     setQuery,

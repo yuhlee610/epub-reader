@@ -26,3 +26,9 @@ export function SaveBookPrompt(arg1:string,arg2:library.PromptConfig):Promise<li
 export function SaveReaderAppearance(arg1:string,arg2:library.ReaderAppearance):Promise<library.BookMetadata>;
 
 export function SaveReadingProgress(arg1:string,arg2:library.ReadingProgress):Promise<library.BookMetadata>;
+
+export function SendGeminiStudyPrompt(arg1:main.GeminiStudyRequest):Promise<main.GeminiStudyResponse>;
+
+export function StreamGeminiStudyPrompt(arg1:main.GeminiStudyRequest):Promise<main.GeminiStudyResponse>;
+
+export function TranslateSelectedText(arg1:main.GoogleTranslateRequest):Promise<main.GoogleTranslateResponse>;

@@ -30,6 +30,10 @@ func (s *Store) readLibrary() (libraryFile, error) {
 	if file.Books == nil {
 		file.Books = []BookMetadata{}
 	}
+	for i := range file.Books {
+		file.Books[i].Appearance = normalizeReaderAppearance(file.Books[i].Appearance)
+		file.Books[i].Prompt = normalizePromptConfig(file.Books[i].Prompt, file.Books[i].Prompt.UpdatedAt)
+	}
 
 	return file, nil
 }

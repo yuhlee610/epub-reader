@@ -3,6 +3,7 @@ package library
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -98,7 +99,7 @@ func TestSaveBookCreatesAndPersistsMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBook() error = %v", err)
 	}
-	if got.Title != "Cradle" || got.Prompt.CustomPrompt == "" || got.Progress.ChapterHref == "" {
+	if got.Title != "Cradle" || len(got.Prompt.Prompts) == 0 || got.Progress.ChapterHref == "" {
 		t.Fatalf("persisted book missing expected metadata: %#v", got)
 	}
 }
@@ -132,8 +133,8 @@ func TestSaveBookUpdatePreservesImportedAtWhenOmitted(t *testing.T) {
 	if updated.FilePath != book.FilePath {
 		t.Fatalf("FilePath = %q, want preserved %q", updated.FilePath, book.FilePath)
 	}
-	if updated.Prompt.CustomPrompt != book.Prompt.CustomPrompt {
-		t.Fatalf("Prompt.CustomPrompt = %q, want preserved %q", updated.Prompt.CustomPrompt, book.Prompt.CustomPrompt)
+	if !reflect.DeepEqual(updated.Prompt, book.Prompt) {
+		t.Fatalf("Prompt = %#v, want preserved %#v", updated.Prompt, book.Prompt)
 	}
 }
 
@@ -259,9 +260,8 @@ func TestUpdateReaderAppearancePersists(t *testing.T) {
 	}
 }
 
-// TestUpdatePromptConfigPersistsAndResets verifies per-book prompts survive
-// reloads and can be reset to the default prompt.
-func TestUpdatePromptConfigPersistsAndResets(t *testing.T) {
+// TestUpdatePromptConfigPersists verifies per-book prompt lists survive reloads.
+func TestUpdatePromptConfigPersists(t *testing.T) {
 	store := newTestStore(t)
 
 	book, err := store.SaveBook(BookMetadata{
@@ -273,13 +273,34 @@ func TestUpdatePromptConfigPersistsAndResets(t *testing.T) {
 	}
 
 	updated, err := store.UpdatePromptConfig(book.ID, PromptConfig{
-		CustomPrompt: "  Translate naturally and explain advancement terms.  ",
+		Prompts: []StudyPrompt{
+			{
+				ID:          "translate",
+				Name:        "Translate",
+				ShortLabel:  "tr",
+				Instruction: "  Translate naturally and explain advancement terms.  ",
+				SortOrder:   2,
+			},
+			{
+				ID:          "grammar",
+				Name:        "Grammar",
+				ShortLabel:  "grammar",
+				Instruction: "Explain grammar.",
+				SortOrder:   1,
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("UpdatePromptConfig() error = %v", err)
 	}
-	if updated.Prompt.CustomPrompt != "Translate naturally and explain advancement terms." {
-		t.Fatalf("CustomPrompt = %q, want trimmed custom prompt", updated.Prompt.CustomPrompt)
+	if len(updated.Prompt.Prompts) != 2 {
+		t.Fatalf("prompt count = %d, want 2", len(updated.Prompt.Prompts))
+	}
+	if updated.Prompt.Prompts[0].ID != "grammar" || updated.Prompt.Prompts[0].ShortLabel != "GRAM" {
+		t.Fatalf("first prompt = %#v, want normalized grammar prompt", updated.Prompt.Prompts[0])
+	}
+	if updated.Prompt.Prompts[1].Instruction != "Translate naturally and explain advancement terms." {
+		t.Fatalf("second prompt instruction = %q, want trimmed instruction", updated.Prompt.Prompts[1].Instruction)
 	}
 	if !updated.Prompt.UpdatedAt.Equal(store.timeProvider()) {
 		t.Fatalf("UpdatedAt = %s, want store timestamp %s", updated.Prompt.UpdatedAt, store.timeProvider())
@@ -293,18 +314,50 @@ func TestUpdatePromptConfigPersistsAndResets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBook() error = %v", err)
 	}
-	if got.Prompt != updated.Prompt {
+	if !reflect.DeepEqual(got.Prompt, updated.Prompt) {
 		t.Fatalf("persisted Prompt = %#v, want %#v", got.Prompt, updated.Prompt)
 	}
+}
 
-	reset, err := store.UpdatePromptConfig(book.ID, PromptConfig{CustomPrompt: "   "})
+// TestUpdatePromptConfigCreatesDefaults verifies empty prompt settings provide
+// usable Gemini actions instead of leaving the selection toolbar empty.
+func TestUpdatePromptConfigCreatesDefaults(t *testing.T) {
+	store := newTestStore(t)
+
+	book, err := store.SaveBook(BookMetadata{
+		Title:            "Cradle",
+		OriginalFileName: "cradle.epub",
+	})
 	if err != nil {
-		t.Fatalf("reset UpdatePromptConfig() error = %v", err)
+		t.Fatalf("SaveBook() error = %v", err)
 	}
-	if reset.Prompt.CustomPrompt != "" {
-		t.Fatalf("reset CustomPrompt = %q, want empty default prompt marker", reset.Prompt.CustomPrompt)
+
+	reset, err := store.UpdatePromptConfig(book.ID, PromptConfig{})
+	if err != nil {
+		t.Fatalf("UpdatePromptConfig() error = %v", err)
 	}
-	if !reset.Prompt.UpdatedAt.IsZero() {
-		t.Fatalf("reset UpdatedAt = %s, want zero time", reset.Prompt.UpdatedAt)
+	if len(reset.Prompt.Prompts) < 2 {
+		t.Fatalf("default prompt count = %d, want at least 2", len(reset.Prompt.Prompts))
+	}
+	if !reset.Prompt.UpdatedAt.Equal(store.timeProvider()) {
+		t.Fatalf("UpdatedAt = %s, want store timestamp %s", reset.Prompt.UpdatedAt, store.timeProvider())
+	}
+}
+
+// TestNormalizePromptConfigMigratesLegacyCustomPrompt verifies existing library
+// metadata with a single customPrompt becomes one selectable prompt action.
+func TestNormalizePromptConfigMigratesLegacyCustomPrompt(t *testing.T) {
+	prompt := normalizePromptConfig(PromptConfig{
+		CustomPrompt: "  Explain sacred arts terms.  ",
+	}, time.Date(2026, 6, 19, 1, 2, 3, 0, time.UTC))
+
+	if len(prompt.Prompts) != 1 {
+		t.Fatalf("prompt count = %d, want 1 migrated prompt", len(prompt.Prompts))
+	}
+	if prompt.Prompts[0].ID != "translate" {
+		t.Fatalf("prompt ID = %q, want translate", prompt.Prompts[0].ID)
+	}
+	if prompt.Prompts[0].Instruction != "Explain sacred arts terms." {
+		t.Fatalf("instruction = %q, want trimmed legacy prompt", prompt.Prompts[0].Instruction)
 	}
 }

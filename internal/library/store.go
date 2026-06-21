@@ -3,6 +3,7 @@ package library
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -23,6 +24,8 @@ var allowedReaderBackgroundColors = map[string]struct{}{
 	"#eef4ee": {},
 	"#f1f1f1": {},
 }
+
+var promptIDCleanup = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // Store persists local book metadata for the desktop app.
 type Store struct {
@@ -244,7 +247,7 @@ func (s *Store) UpdateReaderAppearance(id string, appearance ReaderAppearance) (
 }
 
 // UpdatePromptConfig stores translation and study prompt preferences for one
-// book. An empty custom prompt resets the book to the default study prompt.
+// book. Empty prompt lists reset the book to the default study prompt.
 func (s *Store) UpdatePromptConfig(id string, prompt PromptConfig) (BookMetadata, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -346,14 +349,25 @@ func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMeta
 }
 
 func normalizePromptConfig(prompt PromptConfig, updatedAt time.Time) PromptConfig {
+	prompts := normalizeStudyPrompts(prompt.Prompts)
 	customPrompt := strings.TrimSpace(prompt.CustomPrompt)
-	if customPrompt == "" {
-		return PromptConfig{}
+	if len(prompts) == 0 && customPrompt != "" {
+		prompts = []StudyPrompt{{
+			ID:          "translate",
+			Name:        "Translate",
+			ShortLabel:  "TR",
+			Instruction: customPrompt,
+			SortOrder:   0,
+			IsDefault:   true,
+		}}
+	}
+	if len(prompts) == 0 {
+		prompts = defaultStudyPrompts()
 	}
 
 	return PromptConfig{
-		CustomPrompt: customPrompt,
-		UpdatedAt:    updatedAt,
+		Prompts:   prompts,
+		UpdatedAt: updatedAt,
 	}
 }
 
@@ -385,5 +399,135 @@ func isZeroReaderAppearance(appearance ReaderAppearance) bool {
 }
 
 func isZeroPromptConfig(prompt PromptConfig) bool {
-	return strings.TrimSpace(prompt.CustomPrompt) == "" && prompt.UpdatedAt.IsZero()
+	return strings.TrimSpace(prompt.CustomPrompt) == "" && len(prompt.Prompts) == 0 && prompt.UpdatedAt.IsZero()
+}
+
+func normalizeStudyPrompts(prompts []StudyPrompt) []StudyPrompt {
+	normalized := make([]StudyPrompt, 0, len(prompts))
+	seenIDs := map[string]struct{}{}
+	for _, prompt := range prompts {
+		instruction := strings.TrimSpace(prompt.Instruction)
+		if instruction == "" {
+			continue
+		}
+
+		name := strings.TrimSpace(prompt.Name)
+		if name == "" {
+			name = "Gemini prompt"
+		}
+		shortLabel := strings.ToUpper(strings.TrimSpace(prompt.ShortLabel))
+		if shortLabel == "" {
+			shortLabel = promptShortLabel(name)
+		}
+		if len(shortLabel) > 4 {
+			shortLabel = shortLabel[:4]
+		}
+
+		id := cleanPromptID(prompt.ID)
+		if id == "" {
+			id = cleanPromptID(name)
+		}
+		if id == "" {
+			id = "prompt"
+		}
+		baseID := id
+		for suffix := 2; ; suffix++ {
+			if _, exists := seenIDs[id]; !exists {
+				break
+			}
+			id = fmt.Sprintf("%s-%d", baseID, suffix)
+		}
+		seenIDs[id] = struct{}{}
+
+		normalized = append(normalized, StudyPrompt{
+			ID:          id,
+			Name:        name,
+			ShortLabel:  shortLabel,
+			Instruction: instruction,
+			SortOrder:   prompt.SortOrder,
+			IsDefault:   prompt.IsDefault,
+		})
+	}
+
+	slices.SortFunc(normalized, func(a, b StudyPrompt) int {
+		if a.SortOrder != b.SortOrder {
+			return a.SortOrder - b.SortOrder
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	for i := range normalized {
+		normalized[i].SortOrder = i
+	}
+
+	return normalized
+}
+
+func defaultStudyPrompts() []StudyPrompt {
+	return []StudyPrompt{
+		{
+			ID:         "translate",
+			Name:       "Translate",
+			ShortLabel: "TR",
+			Instruction: strings.Join([]string{
+				"Translate naturally into Vietnamese with the book context in mind.",
+				"List important vocabulary from the selected text with short meanings.",
+				"Explain useful grammar patterns briefly.",
+				"Add any nuance needed to understand the passage.",
+			}, "\n"),
+			SortOrder: 0,
+			IsDefault: true,
+		},
+		{
+			ID:         "grammar",
+			Name:       "Grammar",
+			ShortLabel: "GR",
+			Instruction: strings.Join([]string{
+				"Focus on useful grammar patterns in the selected text.",
+				"Explain sentence structure and word usage concisely.",
+				"Include a short natural translation only when it helps the explanation.",
+			}, "\n"),
+			SortOrder: 1,
+			IsDefault: true,
+		},
+	}
+}
+
+func cleanPromptID(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, "_", "-")
+	value = promptIDCleanup.ReplaceAllString(value, "-")
+	value = strings.Trim(value, "-")
+	if len(value) > 48 {
+		value = strings.Trim(value[:48], "-")
+	}
+	return value
+}
+
+func promptShortLabel(name string) string {
+	words := strings.Fields(name)
+	if len(words) == 0 {
+		return "AI"
+	}
+	if len(words) == 1 {
+		word := strings.ToUpper(words[0])
+		if len(word) <= 2 {
+			return word
+		}
+		return word[:2]
+	}
+
+	var label strings.Builder
+	for _, word := range words {
+		if word == "" {
+			continue
+		}
+		label.WriteByte(strings.ToUpper(word)[0])
+		if label.Len() == 3 {
+			break
+		}
+	}
+	if label.Len() == 0 {
+		return "AI"
+	}
+	return label.String()
 }

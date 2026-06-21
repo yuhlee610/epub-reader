@@ -14,8 +14,31 @@ export namespace library {
 	        this.fontSize = source["fontSize"];
 	    }
 	}
+	export class StudyPrompt {
+	    id: string;
+	    name: string;
+	    shortLabel: string;
+	    instruction: string;
+	    sortOrder: number;
+	    isDefault?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new StudyPrompt(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.shortLabel = source["shortLabel"];
+	        this.instruction = source["instruction"];
+	        this.sortOrder = source["sortOrder"];
+	        this.isDefault = source["isDefault"];
+	    }
+	}
 	export class PromptConfig {
 	    customPrompt?: string;
+	    prompts?: StudyPrompt[];
 	    // Go type: time
 	    updatedAt?: any;
 	
@@ -26,6 +49,7 @@ export namespace library {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.customPrompt = source["customPrompt"];
+	        this.prompts = this.convertValues(source["prompts"], StudyPrompt);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
 	
@@ -208,6 +232,82 @@ export namespace library {
 
 export namespace main {
 	
+	export class GeminiStudyRequest {
+	    requestId?: string;
+	    bookId: string;
+	    promptId: string;
+	    selectedText: string;
+	    chapterTitle?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GeminiStudyRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
+	        this.bookId = source["bookId"];
+	        this.promptId = source["promptId"];
+	        this.selectedText = source["selectedText"];
+	        this.chapterTitle = source["chapterTitle"];
+	    }
+	}
+	export class GoogleTranslateRequest {
+	    text: string;
+	    sourceLanguage?: string;
+	    targetLanguage?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GoogleTranslateRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.sourceLanguage = source["sourceLanguage"];
+	        this.targetLanguage = source["targetLanguage"];
+	    }
+	}
+	export class GoogleTranslateResponse {
+	    originalText: string;
+	    translatedText: string;
+	    sourceLanguage?: string;
+	    targetLanguage: string;
+	    textPreview: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GoogleTranslateResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.originalText = source["originalText"];
+	        this.translatedText = source["translatedText"];
+	        this.sourceLanguage = source["sourceLanguage"];
+	        this.targetLanguage = source["targetLanguage"];
+	        this.textPreview = source["textPreview"];
+	    }
+	}
+	export class GeminiStudyResponse {
+	    promptId: string;
+	    promptName: string;
+	    text: string;
+	    usedModel?: string;
+	    textPreview: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GeminiStudyResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.promptId = source["promptId"];
+	        this.promptName = source["promptName"];
+	        this.text = source["text"];
+	        this.usedModel = source["usedModel"];
+	        this.textPreview = source["textPreview"];
+	    }
+	}
 	export class ImportEPUBResult {
 	    book: library.BookMetadata;
 	    duplicate: boolean;
@@ -244,4 +344,3 @@ export namespace main {
 	}
 
 }
-

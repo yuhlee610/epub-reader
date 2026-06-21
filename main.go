@@ -12,6 +12,10 @@ import (
 var assets embed.FS
 
 func main() {
+	if err := loadLocalEnv(); err != nil {
+		println("Error loading .env:", err.Error())
+	}
+
 	// Create an instance of the app structure
 	app := NewApp()
 

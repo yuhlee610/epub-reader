@@ -140,7 +140,7 @@
 }
 
 .library-layout.has-active-book {
-    grid-template-columns: minmax(0, 1fr) 236px;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
 }
 
 .loading-row,
@@ -349,7 +349,7 @@
 .book-panel {
     position: relative;
     min-width: 0;
-    padding: 18px 16px 16px;
+    padding: 20px 22px 18px;
     border-left: 1px solid #e4e4e4;
     color: #222222;
 }
@@ -529,7 +529,7 @@
 
 .panel-prompt-input {
     width: 100%;
-    min-height: 156px;
+    min-height: 128px;
     padding: 8px;
     border: 1px solid #d8d8d8;
     border-radius: 6px;
@@ -540,6 +540,114 @@
     resize: vertical;
 }
 
+.panel-prompt-list {
+    display: grid;
+    gap: 6px;
+}
+
+.panel-prompt-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 26px 26px 26px;
+    gap: 4px;
+    align-items: center;
+}
+
+.panel-prompt-selector {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+    min-width: 0;
+    min-height: 30px;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 5px;
+    background: #eeeeee;
+    color: #333333;
+    cursor: pointer;
+    text-align: left;
+}
+
+.panel-prompt-row.is-active .panel-prompt-selector {
+    background: #222222;
+    color: #ffffff;
+}
+
+.panel-prompt-selector span {
+    display: inline-grid;
+    place-items: center;
+    min-width: 28px;
+    height: 20px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #3f3570;
+    font-size: 0.65rem;
+    font-weight: 900;
+}
+
+.panel-prompt-selector strong {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.76rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.panel-prompt-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 5px;
+    background: #eeeeee;
+    color: #444444;
+    cursor: pointer;
+}
+
+.panel-prompt-icon:not(:disabled):hover {
+    background: #dedede;
+}
+
+.panel-prompt-icon:disabled {
+    cursor: not-allowed;
+    opacity: 0.38;
+}
+
+.panel-prompt-icon.is-danger:not(:disabled):hover {
+    background: #f0e0de;
+    color: #7a281b;
+}
+
+.panel-prompt-form {
+    display: grid;
+    gap: 8px;
+}
+
+.panel-prompt-form label {
+    display: grid;
+    gap: 4px;
+    color: #777777;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.panel-prompt-field {
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid #d8d8d8;
+    border-radius: 6px;
+    box-sizing: border-box;
+    background: #ffffff;
+    color: #222222;
+    font-size: 0.78rem;
+    text-transform: none;
+}
+
+.panel-prompt-field:focus,
 .panel-prompt-input:focus {
     border-color: #9c9c9c;
     outline: 2px solid #d8d8d8;
@@ -1009,6 +1117,26 @@
     line-height: 1;
 }
 
+.reader-study-button:disabled {
+    cursor: wait;
+    opacity: 0.62;
+}
+
+.reader-gemini-prompt-button {
+    grid-template-columns: 18px auto;
+    width: auto;
+    min-width: 48px;
+    padding: 0 7px;
+    gap: 5px;
+}
+
+.reader-gemini-prompt-button span {
+    color: #4b4268;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0;
+}
+
 .reader-study-button:hover,
 .reader-study-button:focus-visible {
     background: #f6f3ec;
@@ -1038,6 +1166,237 @@
     font-size: 0.78rem;
     font-weight: 700;
     box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+}
+
+.reader-gemini-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: grid;
+    place-items: center;
+    padding: 48px;
+    box-sizing: border-box;
+    background: rgba(32, 30, 27, 0.18);
+}
+
+.reader-gemini-dialog {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    width: min(620px, 100%);
+    max-height: min(680px, calc(100vh - 96px));
+    overflow: hidden;
+    border: 1px solid rgba(166, 158, 143, 0.55);
+    border-radius: 8px;
+    background: #fffaf0;
+    color: #2f2b25;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.reader-gemini-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid rgba(166, 158, 143, 0.35);
+}
+
+.reader-gemini-dialog-header span {
+    color: #817766;
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.reader-gemini-dialog-header h2 {
+    margin: 3px 0 0;
+    font-size: 1rem;
+    line-height: 1.2;
+}
+
+.reader-gemini-preview {
+    margin: 0;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(166, 158, 143, 0.24);
+    color: #665e51;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.reader-gemini-state,
+.reader-gemini-error,
+.reader-gemini-response {
+    min-height: 0;
+    padding: 16px;
+    overflow: auto;
+}
+
+.reader-gemini-response-shell {
+    min-height: 0;
+    overflow: auto;
+}
+
+.reader-gemini-response-shell .reader-gemini-response {
+    overflow: visible;
+}
+
+.reader-gemini-state {
+    color: #665e51;
+    font-size: 0.86rem;
+    font-weight: 800;
+}
+
+.reader-gemini-state.is-streaming {
+    min-height: auto;
+    padding-top: 0;
+    overflow: visible;
+    color: #817766;
+    font-size: 0.78rem;
+}
+
+.reader-gemini-error {
+    color: #7a281b;
+    font-size: 0.86rem;
+    line-height: 1.4;
+}
+
+.reader-gemini-response {
+    color: #2f2b25;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.reader-gemini-response > :first-child {
+    margin-top: 0;
+}
+
+.reader-gemini-response > :last-child {
+    margin-bottom: 0;
+}
+
+.reader-gemini-response p {
+    margin: 0 0 0.72rem;
+}
+
+.reader-translation-text {
+    margin: 0;
+    color: #1f1d19;
+    font-size: 1rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.reader-translation-meta {
+    margin: -4px 16px 14px;
+    color: #817766;
+    font-size: 0.7rem;
+    font-weight: 850;
+    text-transform: uppercase;
+}
+
+.reader-gemini-response h1,
+.reader-gemini-response h2,
+.reader-gemini-response h3,
+.reader-gemini-response h4 {
+    margin: 1rem 0 0.4rem;
+    color: #211f1b;
+    font-weight: 850;
+    line-height: 1.25;
+}
+
+.reader-gemini-response h1 {
+    font-size: 1.12rem;
+}
+
+.reader-gemini-response h2 {
+    font-size: 1.04rem;
+}
+
+.reader-gemini-response h3,
+.reader-gemini-response h4 {
+    font-size: 0.96rem;
+}
+
+.reader-gemini-response ul,
+.reader-gemini-response ol {
+    margin: 0 0 0.8rem;
+    padding-left: 1.3rem;
+}
+
+.reader-gemini-response li {
+    margin: 0.22rem 0;
+}
+
+.reader-gemini-response hr {
+    height: 1px;
+    margin: 1rem 0;
+    border: 0;
+    background: rgba(166, 158, 143, 0.38);
+}
+
+.reader-gemini-response code {
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: rgba(107, 93, 68, 0.1);
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.84em;
+}
+
+.reader-gemini-response pre {
+    margin: 0 0 0.8rem;
+    padding: 10px 12px;
+    overflow: auto;
+    border-radius: 6px;
+    background: rgba(107, 93, 68, 0.1);
+}
+
+.reader-gemini-response pre code {
+    padding: 0;
+    background: transparent;
+}
+
+.reader-gemini-response blockquote {
+    margin: 0 0 0.8rem;
+    padding-left: 0.8rem;
+    border-left: 3px solid rgba(166, 158, 143, 0.55);
+    color: #5a5145;
+}
+
+.reader-gemini-response a {
+    color: #2d5f9a;
+    font-weight: 750;
+    text-decoration: none;
+}
+
+.reader-gemini-response a:hover,
+.reader-gemini-response a:focus-visible {
+    text-decoration: underline;
+}
+
+.reader-gemini-table-wrap {
+    max-width: 100%;
+    margin: 0 0 0.9rem;
+    overflow-x: auto;
+}
+
+.reader-gemini-response table {
+    width: 100%;
+    min-width: 460px;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+
+.reader-gemini-response th,
+.reader-gemini-response td {
+    padding: 7px 8px;
+    border: 1px solid rgba(166, 158, 143, 0.42);
+    text-align: left;
+    vertical-align: top;
+}
+
+.reader-gemini-response th {
+    background: rgba(107, 93, 68, 0.08);
+    font-weight: 850;
 }
 
 @media (max-width: 680px) {
@@ -1110,6 +1469,14 @@
         right: 14px;
         bottom: 126px;
         max-width: calc(100% - 28px);
+    }
+
+    .reader-gemini-backdrop {
+        padding: 18px;
+    }
+
+    .reader-gemini-dialog {
+        max-height: calc(100vh - 36px);
     }
 }
 

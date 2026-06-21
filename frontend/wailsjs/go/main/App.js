@@ -49,3 +49,15 @@ export function SaveReaderAppearance(arg1, arg2) {
 export function SaveReadingProgress(arg1, arg2) {
   return window['go']['main']['App']['SaveReadingProgress'](arg1, arg2);
 }
+
+export function SendGeminiStudyPrompt(arg1) {
+  return window['go']['main']['App']['SendGeminiStudyPrompt'](arg1);
+}
+
+export function StreamGeminiStudyPrompt(arg1) {
+  return window['go']['main']['App']['StreamGeminiStudyPrompt'](arg1);
+}
+
+export function TranslateSelectedText(arg1) {
+  return window['go']['main']['App']['TranslateSelectedText'](arg1);
+}
