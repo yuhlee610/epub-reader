@@ -96,6 +96,10 @@ export function ReaderView({
   const positioningTimeoutRef = useRef(null);
   const requestedPageIndexRef = useRef(0);
   const savedProgressRef = useRef('');
+  const markedSearchTargetIDRef = useRef('');
+  const navigatedSearchTargetIDRef = useRef('');
+  const chapterIndexRef = useRef(chapterIndex);
+  const onSelectChapterRef = useRef(onSelectChapter);
   const studyMessageTimeoutRef = useRef(null);
   const [contentWidth, setContentWidth] = useState(1);
   const [pageCount, setPageCount] = useState(1);
@@ -112,6 +116,7 @@ export function ReaderView({
   const [geminiResponse, setGeminiResponse] = useState(null);
   const [geminiError, setGeminiError] = useState('');
   const [activeGeminiPromptID, setActiveGeminiPromptID] = useState('');
+  const [readerSearchTarget, setReaderSearchTarget] = useState(null);
   const chapterCount = readerBook?.chapters?.length ?? 0;
   const currentBook = readerBook?.book;
 
@@ -137,6 +142,11 @@ export function ReaderView({
     setGeminiError('');
     setActiveGeminiPromptID('');
   }, [chapter?.href]);
+
+  useEffect(() => {
+    chapterIndexRef.current = chapterIndex;
+    onSelectChapterRef.current = onSelectChapter;
+  }, [chapterIndex, onSelectChapter]);
 
   useEffect(() => () => {
     window.clearTimeout(positioningTimeoutRef.current);
@@ -355,6 +365,34 @@ export function ReaderView({
     saveVisiblePage,
   ]);
 
+  const selectSearchResult = useCallback((result) => {
+    if (!result) {
+      return;
+    }
+
+    markedSearchTargetIDRef.current = '';
+    navigatedSearchTargetIDRef.current = '';
+    setReaderSearchTarget({...result});
+    setSelectedStudyText('');
+    setSelectionToolbarPosition(null);
+    setStudyActionMessage('');
+
+    if (result.chapterIndex !== chapterIndexRef.current) {
+      onSelectChapterRef.current(result.chapterIndex, 0, null, {deferProgress: true});
+    }
+  }, []);
+
+  const clearSearchTarget = useCallback(() => {
+    const content = contentRef.current;
+    if (content) {
+      clearReaderSearchMarks(content);
+    }
+
+    markedSearchTargetIDRef.current = '';
+    navigatedSearchTargetIDRef.current = '';
+    setReaderSearchTarget(null);
+  }, []);
+
   const showStudyMessage = useCallback((message) => {
     window.clearTimeout(studyMessageTimeoutRef.current);
     setStudyActionMessage(message);
@@ -544,6 +582,83 @@ export function ReaderView({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [goNext, goPrevious]);
 
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    const page = pageRef.current;
+    if (!content) {
+      return undefined;
+    }
+
+    const targetID = readerSearchTarget?.id || '';
+    if (
+      !readerSearchTarget ||
+      !chapter ||
+      readerSearchTarget.chapterIndex !== chapterIndex ||
+      readerSearchTarget.chapterHref !== chapter.href ||
+      !page ||
+      !isChapterMeasured
+    ) {
+      if (markedSearchTargetIDRef.current) {
+        clearReaderSearchMarks(content);
+        markedSearchTargetIDRef.current = '';
+      }
+      return undefined;
+    }
+
+    if (
+      markedSearchTargetIDRef.current === targetID &&
+      content.querySelector('mark.reader-search-hit')
+    ) {
+      return undefined;
+    }
+
+    clearReaderSearchMarks(content);
+    markedSearchTargetIDRef.current = '';
+
+    const timeoutID = window.setTimeout(() => {
+      const mark = markReaderSearchHit(content, readerSearchTarget);
+      if (!mark) {
+        return;
+      }
+
+      markedSearchTargetIDRef.current = targetID;
+      if (navigatedSearchTargetIDRef.current === targetID) {
+        return;
+      }
+
+      const targetPageIndex = readerPageIndexForElement(
+        mark,
+        page,
+        pageStep,
+        pageCount,
+        maxPageOffset,
+      );
+      requestedPageIndexRef.current = null;
+      setIsPageContentHidden(false);
+      setIsPagePositioning(false);
+      setPageIndex(targetPageIndex);
+      navigatedSearchTargetIDRef.current = targetID;
+      saveVisiblePage(targetPageIndex, readingProgressPercent(
+        chapterIndex,
+        chapterCount,
+        targetPageIndex,
+        pageCount,
+      ));
+    }, 0);
+
+    return () => window.clearTimeout(timeoutID);
+  }, [
+    chapter,
+    chapterCount,
+    chapterIndex,
+    isChapterMeasured,
+    maxPageOffset,
+    pageCount,
+    pageStep,
+    readerSearchTarget,
+    saveVisiblePage,
+  ]);
+
   if (isLoading && !readerBook) {
     return (
       <main className="reader-loading" role="status">
@@ -588,8 +703,11 @@ export function ReaderView({
           appearance={appearance}
           book={readerBook.book}
           chapters={readerBook.chapters}
+          activeSearchResultID={readerSearchTarget?.id || ''}
           onClose={onClose}
           onAppearanceChange={onAppearanceChange}
+          onClearSearchTarget={clearSearchTarget}
+          onSelectSearchResult={selectSearchResult}
           onSelectChapter={onSelectChapter}
           onToggleToc={() => setIsTocOpen(false)}
         />
@@ -597,18 +715,18 @@ export function ReaderView({
 
       <section className="reader-stage" aria-label="Reader" ref={stageRef}>
         <div className="reader-topline">
-          <button
-            aria-label={isTocOpen ? 'Collapse table of contents' : 'Show table of contents'}
-            className="reader-stage-back"
-            onClick={() => setIsTocOpen((isOpen) => !isOpen)}
-            type="button"
-          >
-            {isTocOpen ? (
-              <PanelLeftClose aria-hidden="true" size={17} strokeWidth={2} />
-            ) : (
+          {isTocOpen ? (
+            <span className="reader-stage-back-spacer" aria-hidden="true" />
+          ) : (
+            <button
+              aria-label="Show table of contents"
+              className="reader-stage-back"
+              onClick={() => setIsTocOpen(true)}
+              type="button"
+            >
               <PanelLeftOpen aria-hidden="true" size={17} strokeWidth={2} />
-            )}
-          </button>
+            </button>
+          )}
           <span>{chapter.title}</span>
           <div className="reader-window-actions" aria-label="Window controls">
             <button
@@ -908,6 +1026,109 @@ function GeminiIcon() {
   );
 }
 
+function clearReaderSearchMarks(content) {
+  const marks = Array.from(content.querySelectorAll('mark.reader-search-hit'));
+  marks.forEach((mark) => {
+    const parent = mark.parentNode;
+    if (!parent) {
+      return;
+    }
+
+    while (mark.firstChild) {
+      parent.insertBefore(mark.firstChild, mark);
+    }
+    parent.removeChild(mark);
+    parent.normalize();
+  });
+}
+
+function markReaderSearchHit(content, result) {
+  const needle = normalizeSearchQuery(result.query);
+  if (!needle || typeof document.createTreeWalker !== 'function') {
+    return null;
+  }
+
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let occurrenceIndex = 0;
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.nodeValue || '';
+    const lowerText = text.toLowerCase();
+    let searchFrom = 0;
+    let matchIndex = lowerText.indexOf(needle.toLowerCase(), searchFrom);
+
+    while (matchIndex >= 0) {
+      if (occurrenceIndex === result.occurrenceIndex) {
+        const range = document.createRange();
+        range.setStart(node, matchIndex);
+        range.setEnd(node, matchIndex + needle.length);
+
+        const mark = document.createElement('mark');
+        mark.className = 'reader-search-hit';
+        range.surroundContents(mark);
+        range.detach();
+        return mark;
+      }
+
+      occurrenceIndex += 1;
+      searchFrom = matchIndex + Math.max(needle.length, 1);
+      matchIndex = lowerText.indexOf(needle.toLowerCase(), searchFrom);
+    }
+
+    node = walker.nextNode();
+  }
+
+  return markFirstReaderSearchHit(content, needle);
+}
+
+function markFirstReaderSearchHit(content, needle) {
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node.nodeValue || '';
+    const matchIndex = text.toLowerCase().indexOf(needle.toLowerCase());
+    if (matchIndex >= 0) {
+      const range = document.createRange();
+      range.setStart(node, matchIndex);
+      range.setEnd(node, matchIndex + needle.length);
+
+      const mark = document.createElement('mark');
+      mark.className = 'reader-search-hit';
+      range.surroundContents(mark);
+      range.detach();
+      return mark;
+    }
+
+    node = walker.nextNode();
+  }
+
+  return null;
+}
+
+function readerPageIndexForElement(element, page, pageStep, pageCount, maxPageOffset) {
+  if (!element || !page || pageStep <= 0 || pageCount <= 1) {
+    return 0;
+  }
+
+  const rect = element.getBoundingClientRect();
+  const pageRect = page.getBoundingClientRect();
+  const content = element.closest('.reader-chapter-content');
+  const currentOffset = content
+    ? readerTransformOffset(window.getComputedStyle(content).transform)
+    : 0;
+  const targetOffset = clampNumber(
+    rect.left + currentOffset - pageRect.left,
+    0,
+    Math.max(0, maxPageOffset),
+  );
+
+  return Math.round(clampNumber(
+    Math.floor((targetOffset + (pageStep / 3)) / pageStep),
+    0,
+    pageCount - 1,
+  ));
+}
+
 function GeminiResponseDialog({error, response, onClose}) {
   const responseText = String(response.text || '');
   const providerLabel = response.providerLabel || 'Gemini response';
@@ -1187,16 +1408,47 @@ function normalizeReaderAppearance(appearance) {
 }
 
 function ReaderSidebar({
+  activeSearchResultID,
   activeChapterIndex,
   appearance,
   book,
   chapters,
   onClose,
   onAppearanceChange,
+  onClearSearchTarget,
+  onSelectSearchResult,
   onSelectChapter,
   onToggleToc,
 }) {
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  function closeSearch() {
+    setIsSearchOpen(false);
+    onClearSearchTarget?.();
+  }
+
+  function toggleSearch() {
+    setIsAppearanceOpen(false);
+    setIsSearchOpen((isOpen) => {
+      if (isOpen) {
+        onClearSearchTarget?.();
+      }
+
+      return !isOpen;
+    });
+  }
+
+  function toggleAppearance() {
+    setIsSearchOpen((isOpen) => {
+      if (isOpen) {
+        onClearSearchTarget?.();
+      }
+
+      return false;
+    });
+    setIsAppearanceOpen((isOpen) => !isOpen);
+  }
 
   return (
     <aside className="reader-sidebar" aria-label="Reader table of contents">
@@ -1212,7 +1464,8 @@ function ReaderSidebar({
         <div className="reader-sidebar-tools">
           <button
             aria-label="Search in book"
-            className="reader-icon-button"
+            className={isSearchOpen ? 'reader-icon-button is-active' : 'reader-icon-button'}
+            onClick={toggleSearch}
             type="button"
           >
             <Search aria-hidden="true" size={17} strokeWidth={2} />
@@ -1220,7 +1473,7 @@ function ReaderSidebar({
           <button
             aria-label="Reader appearance settings"
             className={isAppearanceOpen ? 'reader-icon-button is-active' : 'reader-icon-button'}
-            onClick={() => setIsAppearanceOpen((isOpen) => !isOpen)}
+            onClick={toggleAppearance}
             type="button"
           >
             <Menu aria-hidden="true" size={18} strokeWidth={2} />
@@ -1315,24 +1568,35 @@ function ReaderSidebar({
         )}
       </div>
 
-      <ol className="reader-toc">
-        {chapters.map((chapter) => (
-          <li key={chapter.href}>
-            <button
-              className={
-                chapter.index === activeChapterIndex
-                  ? 'reader-toc-item is-active'
-                  : 'reader-toc-item'
-              }
-              onClick={() => onSelectChapter(chapter.index)}
-              type="button"
-            >
-              <span>{chapter.title}</span>
-              <span>{chapter.index + 1}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      {isSearchOpen ? (
+        <ReaderSearchPanel
+          activeResultID={activeSearchResultID}
+          activeChapterIndex={activeChapterIndex}
+          chapters={chapters}
+          onClearSearchTarget={onClearSearchTarget}
+          onClose={closeSearch}
+          onSelectResult={onSelectSearchResult}
+        />
+      ) : (
+        <ol className="reader-toc">
+          {chapters.map((chapter) => (
+            <li key={chapter.href}>
+              <button
+                className={
+                  chapter.index === activeChapterIndex
+                    ? 'reader-toc-item is-active'
+                    : 'reader-toc-item'
+                }
+                onClick={() => onSelectChapter(chapter.index)}
+                type="button"
+              >
+                <span>{chapter.title}</span>
+                <span>{chapter.index + 1}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
 
       <div className="reader-sidebar-footer">
         <button
@@ -1359,4 +1623,264 @@ function ReaderSidebar({
       </div>
     </aside>
   );
+}
+
+function ReaderSearchPanel({
+  activeResultID,
+  activeChapterIndex,
+  chapters,
+  onClearSearchTarget,
+  onClose,
+  onSelectResult,
+}) {
+  const inputRef = useRef(null);
+  const activeChapterIndexRef = useRef(activeChapterIndex);
+  const onClearSearchTargetRef = useRef(onClearSearchTarget);
+  const onSelectResultRef = useRef(onSelectResult);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [keyboardResultIndex, setKeyboardResultIndex] = useState(0);
+  const normalizedQuery = normalizeSearchQuery(query);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    activeChapterIndexRef.current = activeChapterIndex;
+    onClearSearchTargetRef.current = onClearSearchTarget;
+    onSelectResultRef.current = onSelectResult;
+  }, [activeChapterIndex, onClearSearchTarget, onSelectResult]);
+
+  useEffect(() => {
+    onClearSearchTargetRef.current?.();
+
+    if (!normalizedQuery) {
+      setResults([]);
+      setIsSearching(false);
+      setKeyboardResultIndex(0);
+      return undefined;
+    }
+
+    setIsSearching(true);
+    const timeoutID = window.setTimeout(() => {
+      const nextResults = buildReaderSearchResults(chapters, normalizedQuery);
+      setResults(nextResults);
+      setKeyboardResultIndex(0);
+      setIsSearching(false);
+
+      const currentChapterResult = nextResults.find((result) => (
+        result.chapterIndex === activeChapterIndexRef.current
+      ));
+      if (currentChapterResult) {
+        onSelectResultRef.current?.(currentChapterResult);
+      }
+    }, 80);
+
+    return () => window.clearTimeout(timeoutID);
+  }, [chapters, normalizedQuery]);
+
+  useEffect(() => {
+    setKeyboardResultIndex((current) => (
+      results.length === 0 ? 0 : clampInteger(current, 0, results.length - 1)
+    ));
+  }, [results.length]);
+
+  function selectResult(result) {
+    if (!result) {
+      return;
+    }
+
+    onSelectResult?.(result);
+  }
+
+  function handleInputKeyDown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (event.key === 'ArrowDown' && results.length > 0) {
+      event.preventDefault();
+      setKeyboardResultIndex((current) => (current + 1) % results.length);
+      return;
+    }
+
+    if (event.key === 'ArrowUp' && results.length > 0) {
+      event.preventDefault();
+      setKeyboardResultIndex((current) => (
+        current === 0 ? results.length - 1 : current - 1
+      ));
+      return;
+    }
+
+    if (event.key === 'Enter' && results.length > 0) {
+      event.preventDefault();
+      const result = results[keyboardResultIndex] || results[0];
+      selectResult(result);
+      setKeyboardResultIndex((current) => (current + 1) % results.length);
+    }
+  }
+
+  return (
+    <section className="reader-search-panel" aria-label="Search in book">
+      <div className="reader-search-form">
+        <Search aria-hidden="true" size={15} strokeWidth={2} />
+        <input
+          aria-label="Search text in this book"
+          className="reader-search-input"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={handleInputKeyDown}
+          placeholder="Search in book"
+          ref={inputRef}
+          type="text"
+          value={query}
+        />
+        {query && (
+          <button
+            aria-label="Clear search"
+            className="reader-search-clear"
+            onClick={() => setQuery('')}
+            type="button"
+          >
+            <X aria-hidden="true" size={14} strokeWidth={2} />
+          </button>
+        )}
+      </div>
+
+      {!normalizedQuery ? (
+        <div className="reader-search-state">
+          Type a word or phrase to search this book.
+        </div>
+      ) : isSearching ? (
+        <div className="reader-search-state" role="status">
+          Searching...
+        </div>
+      ) : results.length === 0 ? (
+        <div className="reader-search-state">
+          No matches for "{normalizedQuery}".
+        </div>
+      ) : (
+        <>
+          <div className="reader-search-count" aria-live="polite">
+            {results.length} {results.length === 1 ? 'match' : 'matches'}
+          </div>
+          <ol className="reader-search-results">
+            {results.map((result, index) => (
+              <li key={result.id}>
+                <button
+                  className={[
+                    'reader-search-result',
+                    result.id === activeResultID ? 'is-active' : '',
+                    index === keyboardResultIndex ? 'is-keyboard-active' : '',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => {
+                    selectResult(result);
+                    setKeyboardResultIndex(index);
+                  }}
+                  type="button"
+                >
+                  <span className="reader-search-result-title">
+                    {result.chapterTitle}
+                  </span>
+                  <span className="reader-search-result-snippet">
+                    <ReaderSearchSnippet
+                      query={normalizedQuery}
+                      text={result.snippet}
+                    />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ReaderSearchSnippet({query, text}) {
+  const matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
+  if (matchIndex < 0) {
+    return text;
+  }
+
+  const before = text.slice(0, matchIndex);
+  const match = text.slice(matchIndex, matchIndex + query.length);
+  const after = text.slice(matchIndex + query.length);
+
+  return (
+    <>
+      {before}
+      <mark>{match}</mark>
+      {after}
+    </>
+  );
+}
+
+function buildReaderSearchResults(chapters, query) {
+  const results = [];
+  const normalizedQuery = normalizeSearchQuery(query);
+  if (!normalizedQuery) {
+    return results;
+  }
+
+  chapters.forEach((chapter) => {
+    const text = searchTextFromHTML(chapter.bodyHtml);
+    const lowerText = text.toLowerCase();
+    const lowerQuery = normalizedQuery.toLowerCase();
+    let occurrenceIndex = 0;
+    let searchFrom = 0;
+    let matchIndex = lowerText.indexOf(lowerQuery, searchFrom);
+
+    while (matchIndex >= 0 && results.length < 100) {
+      results.push({
+        id: `${chapter.href}:${matchIndex}:${occurrenceIndex}`,
+        chapterHref: chapter.href,
+        chapterIndex: chapter.index,
+        chapterTitle: chapter.title || `Chapter ${chapter.index + 1}`,
+        occurrenceIndex,
+        query: normalizedQuery,
+        snippet: readerSearchSnippet(text, matchIndex, normalizedQuery.length),
+      });
+
+      occurrenceIndex += 1;
+      searchFrom = matchIndex + Math.max(normalizedQuery.length, 1);
+      matchIndex = lowerText.indexOf(lowerQuery, searchFrom);
+    }
+  });
+
+  return results;
+}
+
+function searchTextFromHTML(html) {
+  if (typeof document !== 'undefined') {
+    const element = document.createElement('div');
+    element.innerHTML = String(html || '');
+    return cleanSearchText(element.textContent || '');
+  }
+
+  return cleanSearchText(String(html || '').replace(/<[^>]*>/g, ' '));
+}
+
+function readerSearchSnippet(text, matchIndex, matchLength) {
+  const start = Math.max(0, matchIndex - 42);
+  const end = Math.min(text.length, matchIndex + matchLength + 58);
+  const prefix = start > 0 ? '...' : '';
+  const suffix = end < text.length ? '...' : '';
+  return `${prefix}${text.slice(start, end).trim()}${suffix}`;
+}
+
+function normalizeSearchQuery(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function cleanSearchText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function clampInteger(value, min, max) {
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
