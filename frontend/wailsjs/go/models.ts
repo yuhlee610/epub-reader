@@ -252,6 +252,26 @@ export namespace main {
 	        this.chapterTitle = source["chapterTitle"];
 	    }
 	}
+	export class GeminiStudyResponse {
+	    promptId: string;
+	    promptName: string;
+	    text: string;
+	    usedModel?: string;
+	    textPreview: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GeminiStudyResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.promptId = source["promptId"];
+	        this.promptName = source["promptName"];
+	        this.text = source["text"];
+	        this.usedModel = source["usedModel"];
+	        this.textPreview = source["textPreview"];
+	    }
+	}
 	export class GoogleTranslateRequest {
 	    text: string;
 	    sourceLanguage?: string;
@@ -285,26 +305,6 @@ export namespace main {
 	        this.translatedText = source["translatedText"];
 	        this.sourceLanguage = source["sourceLanguage"];
 	        this.targetLanguage = source["targetLanguage"];
-	        this.textPreview = source["textPreview"];
-	    }
-	}
-	export class GeminiStudyResponse {
-	    promptId: string;
-	    promptName: string;
-	    text: string;
-	    usedModel?: string;
-	    textPreview: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new GeminiStudyResponse(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.promptId = source["promptId"];
-	        this.promptName = source["promptName"];
-	        this.text = source["text"];
-	        this.usedModel = source["usedModel"];
 	        this.textPreview = source["textPreview"];
 	    }
 	}
@@ -344,3 +344,4 @@ export namespace main {
 	}
 
 }
+

@@ -21,10 +21,11 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "Epub reader",
-		Width:     798,
-		Height:    563,
-		Frameless: true,
+		Title:            "Epub reader",
+		Width:            798,
+		Height:           563,
+		Frameless:        true,
+		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
