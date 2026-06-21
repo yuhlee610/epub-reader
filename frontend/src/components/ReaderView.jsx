@@ -14,6 +14,7 @@ import {
   PanelLeftOpen,
   Pin,
   Search,
+  Volume2,
   X,
 } from 'lucide-react';
 import {
@@ -382,6 +383,7 @@ export function ReaderView({
     setGeminiResponse({
       providerLabel: toolConfig.label,
       promptName: prompt?.name || 'Translate',
+      originalText: selectedText,
       textPreview: selectedTextPreview(selectedText),
       text: '',
       isLoading: true,
@@ -399,10 +401,12 @@ export function ReaderView({
       setGeminiResponse({
         providerLabel: toolConfig.label,
         promptName: prompt?.name || 'Translate',
+        originalText: response.originalText || selectedText,
         textPreview: response.textPreview || selectedTextPreview(selectedText),
         text: response.translatedText || '',
         sourceLanguage: response.sourceLanguage,
         targetLanguage: response.targetLanguage,
+        pronunciationIpa: response.pronunciationIpa,
         isLoading: false,
         isPlainText: true,
       });
@@ -412,6 +416,7 @@ export function ReaderView({
         ...(current || {}),
         providerLabel: toolConfig.label,
         promptName: prompt?.name || 'Translate',
+        originalText: selectedText,
         textPreview: selectedTextPreview(selectedText),
         text: current?.text || '',
         isLoading: false,
@@ -912,12 +917,22 @@ function GeminiResponseDialog({error, response, onClose}) {
   const streamingLabel = response.providerLabel === STUDY_TOOL_CONFIG.google.label
     ? ''
     : 'Gemini is still writing...';
+  function handleBackdropMouseDown(event) {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  }
 
   return (
-    <div className="reader-gemini-backdrop" role="presentation">
+    <div
+      className="reader-gemini-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      role="presentation"
+    >
       <section
         aria-label={`${providerLabel} response`}
         aria-live="polite"
+        aria-modal="true"
         className="reader-gemini-dialog"
         role="dialog"
       >
@@ -936,7 +951,17 @@ function GeminiResponseDialog({error, response, onClose}) {
           </button>
         </div>
         {response.textPreview && (
-          <p className="reader-gemini-preview">{response.textPreview}</p>
+          <div className="reader-gemini-preview">
+            <p>{response.textPreview}</p>
+            {response.pronunciationIpa && (
+              <span className="reader-ipa">{response.pronunciationIpa}</span>
+            )}
+            <PronunciationButton
+              label="Listen to selected text pronunciation"
+              lang={speechLanguage(response.sourceLanguage, 'en-US')}
+              text={response.originalText || response.textPreview}
+            />
+          </div>
         )}
         {response.isLoading && !responseText ? (
           <div className="reader-gemini-state" role="status">
@@ -945,7 +970,9 @@ function GeminiResponseDialog({error, response, onClose}) {
         ) : (
           <div className="reader-gemini-response-shell">
             {responseText && response.isPlainText ? (
-              <p className="reader-gemini-response reader-translation-text">{responseText}</p>
+              <div className="reader-gemini-response reader-translation-text">
+                <p>{responseText}</p>
+              </div>
             ) : responseText ? (
               <ReactMarkdown
                 className="reader-gemini-response"
@@ -978,6 +1005,24 @@ function GeminiResponseDialog({error, response, onClose}) {
   );
 }
 
+function PronunciationButton({label, lang, text}) {
+  if (!cleanSelectedText(text)) {
+    return null;
+  }
+
+  return (
+    <button
+      aria-label={label}
+      className="reader-audio-button"
+      onClick={() => speakText(text, lang)}
+      title={label}
+      type="button"
+    >
+      <Volume2 aria-hidden="true" size={15} strokeWidth={2} />
+    </button>
+  );
+}
+
 function normalizeStudyPrompts(prompts) {
   return (prompts ?? [])
     .map((prompt) => ({
@@ -997,6 +1042,34 @@ function isTranslationPrompt(prompt) {
 function selectedTextPreview(value) {
   const text = cleanSelectedText(value);
   return text.length > 180 ? `${text.slice(0, 180).trim()}...` : text;
+}
+
+function speakText(value, lang) {
+  const text = cleanSelectedText(value);
+  const Utterance = globalThis.SpeechSynthesisUtterance;
+  if (!text || typeof Utterance !== 'function' || !globalThis.speechSynthesis) {
+    return;
+  }
+
+  const utterance = new Utterance(text);
+  utterance.lang = lang;
+  globalThis.speechSynthesis.cancel();
+  globalThis.speechSynthesis.speak(utterance);
+}
+
+function speechLanguage(language, fallback) {
+  const normalized = String(language || '').trim().toLowerCase();
+  if (normalized === 'vi') {
+    return 'vi-VN';
+  }
+  if (normalized === 'en') {
+    return 'en-US';
+  }
+  if (/^[a-z]{2}-[a-z]{2}$/i.test(normalized)) {
+    return normalized;
+  }
+
+  return fallback;
 }
 
 function geminiRequestID() {

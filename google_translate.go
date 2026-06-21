@@ -28,11 +28,12 @@ type GoogleTranslateRequest struct {
 
 // GoogleTranslateResponse is the text displayed in the in-app translation popup.
 type GoogleTranslateResponse struct {
-	OriginalText   string `json:"originalText"`
-	TranslatedText string `json:"translatedText"`
-	SourceLanguage string `json:"sourceLanguage,omitempty"`
-	TargetLanguage string `json:"targetLanguage"`
-	TextPreview    string `json:"textPreview"`
+	OriginalText     string `json:"originalText"`
+	TranslatedText   string `json:"translatedText"`
+	SourceLanguage   string `json:"sourceLanguage,omitempty"`
+	TargetLanguage   string `json:"targetLanguage"`
+	PronunciationIPA string `json:"pronunciationIpa,omitempty"`
+	TextPreview      string `json:"textPreview"`
 }
 
 // TranslateSelectedText returns an in-app Google Translate result without
@@ -77,11 +78,12 @@ func (a *App) TranslateSelectedText(request GoogleTranslateRequest) (GoogleTrans
 	}
 
 	return GoogleTranslateResponse{
-		OriginalText:   text,
-		TranslatedText: translatedText,
-		SourceLanguage: detectedLanguage,
-		TargetLanguage: targetLanguage,
-		TextPreview:    selectedTextPreview(text),
+		OriginalText:     text,
+		TranslatedText:   translatedText,
+		SourceLanguage:   detectedLanguage,
+		TargetLanguage:   targetLanguage,
+		PronunciationIPA: a.lookupPronunciationIPA(context.Background(), text),
+		TextPreview:      selectedTextPreview(text),
 	}, nil
 }
 

@@ -49,6 +49,7 @@
 .toolbar-icon,
 .window-tool {
     --wails-draggable: no-drag;
+    box-sizing: border-box;
     display: inline-grid;
     place-items: center;
     border: 0;
@@ -198,6 +199,7 @@
     position: absolute;
     top: 6px;
     right: 6px;
+    box-sizing: border-box;
     display: grid;
     place-items: center;
     width: 24px;
@@ -358,10 +360,12 @@
     position: absolute;
     top: 4px;
     right: 4px;
+    box-sizing: border-box;
     display: grid;
     place-items: center;
     width: 28px;
     height: 28px;
+    padding: 0;
     border: 0;
     border-radius: 999px;
     background: transparent;
@@ -594,10 +598,12 @@
 }
 
 .panel-prompt-icon {
+    box-sizing: border-box;
     display: inline-grid;
     place-items: center;
     width: 26px;
     height: 26px;
+    padding: 0;
     border: 0;
     border-radius: 5px;
     background: #eeeeee;
@@ -709,12 +715,15 @@
 .reader-icon-button,
 .reader-footer-button,
 .reader-nav-button {
+    box-sizing: border-box;
     display: inline-grid;
     place-items: center;
+    padding: 0;
     border: 0;
     background: transparent;
     color: #333333;
     cursor: pointer;
+    line-height: 1;
 }
 
 .reader-icon-button {
@@ -956,10 +965,12 @@
 
 .reader-stage-back {
     --wails-draggable: no-drag;
+    box-sizing: border-box;
     display: grid;
     place-items: center;
     width: 28px;
     height: 28px;
+    padding: 0;
     border: 0;
     border-radius: 999px;
     background: transparent;
@@ -1104,6 +1115,7 @@
 }
 
 .reader-study-button {
+    box-sizing: border-box;
     display: inline-grid;
     place-items: center;
     width: 30px;
@@ -1215,12 +1227,65 @@
 }
 
 .reader-gemini-preview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 30px;
+    gap: 8px;
+    align-items: center;
     margin: 0;
     padding: 10px 16px;
     border-bottom: 1px solid rgba(166, 158, 143, 0.24);
     color: #665e51;
     font-size: 0.78rem;
     line-height: 1.35;
+}
+
+.reader-gemini-preview p {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-ipa {
+    color: #3f392f;
+    font-family: "Georgia", "Times New Roman", serif;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.reader-audio-button {
+    box-sizing: border-box;
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(166, 158, 143, 0.4);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    color: #5d5548;
+    cursor: pointer;
+}
+
+.reader-audio-button:hover,
+.reader-audio-button:focus-visible {
+    background: #ffffff;
+    color: #24211d;
+}
+
+.book-remove-button svg,
+.panel-close svg,
+.panel-prompt-icon svg,
+.reader-icon-button svg,
+.reader-footer-button svg,
+.reader-stage-back svg,
+.reader-study-button svg,
+.reader-audio-button svg,
+.reader-nav-button svg {
+    display: block;
+    flex: 0 0 auto;
 }
 
 .reader-gemini-state,
@@ -1284,6 +1349,10 @@
     font-size: 1rem;
     line-height: 1.55;
     white-space: pre-wrap;
+}
+
+.reader-translation-text p {
+    margin: 0;
 }
 
 .reader-translation-meta {

@@ -293,6 +293,7 @@ export namespace main {
 	    translatedText: string;
 	    sourceLanguage?: string;
 	    targetLanguage: string;
+	    pronunciationIpa?: string;
 	    textPreview: string;
 	
 	    static createFrom(source: any = {}) {
@@ -305,6 +306,7 @@ export namespace main {
 	        this.translatedText = source["translatedText"];
 	        this.sourceLanguage = source["sourceLanguage"];
 	        this.targetLanguage = source["targetLanguage"];
+	        this.pronunciationIpa = source["pronunciationIpa"];
 	        this.textPreview = source["textPreview"];
 	    }
 	}

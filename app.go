@@ -20,6 +20,7 @@ type App struct {
 	httpClient              *http.Client
 	geminiEndpoint          string
 	googleTranslateEndpoint string
+	dictionaryEndpoint      string
 }
 
 // ImportEPUBResult describes the UI-facing result of an import attempt.
