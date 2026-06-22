@@ -12,7 +12,6 @@ import {
   Minus,
   PanelLeftClose,
   PanelLeftOpen,
-  Pin,
   Search,
   Volume2,
   X,
@@ -1477,13 +1476,6 @@ function ReaderSidebar({
             type="button"
           >
             <Menu aria-hidden="true" size={18} strokeWidth={2} />
-          </button>
-          <button
-            aria-label="Pin sidebar"
-            className="reader-icon-button is-muted"
-            type="button"
-          >
-            <Pin aria-hidden="true" size={16} strokeWidth={2} />
           </button>
           <button
             aria-label="Close reader"
