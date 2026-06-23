@@ -1041,6 +1041,156 @@
     color: #242424;
 }
 
+.reader-panel-empty {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    min-height: 0;
+    padding: 12px 10px;
+    color: #777777;
+}
+
+.reader-panel-empty strong {
+    color: #555555;
+    font-size: 0.78rem;
+    font-weight: 850;
+}
+
+.reader-panel-empty p {
+    margin: 0;
+    font-size: 0.74rem;
+    font-weight: 650;
+    line-height: 1.4;
+}
+
+.reader-notes-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    min-height: 0;
+    padding: 6px 5px 8px;
+}
+
+.reader-notes-count {
+    padding: 2px 4px;
+    color: #5f5f5f;
+    font-size: 0.72rem;
+    font-weight: 750;
+    text-transform: uppercase;
+}
+
+.reader-notes-list {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.reader-note-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 4px;
+    align-items: start;
+    margin-bottom: 4px;
+    border-radius: 6px;
+}
+
+.reader-note-jump {
+    display: grid;
+    grid-template-columns: 4px minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    padding: 8px 7px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #4f4f4f;
+    cursor: pointer;
+    text-align: left;
+}
+
+.reader-note-jump:hover,
+.reader-note-jump:focus-visible {
+    background: #e9e9e9;
+}
+
+.reader-note-color {
+    width: 4px;
+    min-height: 100%;
+    border-radius: 999px;
+    background: var(--note-color, #facd4d);
+}
+
+.reader-note-body {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.reader-note-body strong {
+    overflow: hidden;
+    font-size: 0.74rem;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-note-body span {
+    display: -webkit-box;
+    overflow: hidden;
+    color: #666666;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.34;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.reader-note-body .reader-note-user-text {
+    color: #333333;
+    font-weight: 760;
+    white-space: pre-line;
+}
+
+.reader-note-body .reader-note-quote {
+    color: #777777;
+    font-style: italic;
+}
+
+.reader-note-body .reader-note-quote::before {
+    content: "\201C";
+}
+
+.reader-note-body .reader-note-quote::after {
+    content: "\201D";
+}
+
+.reader-note-body small {
+    color: #909090;
+    font-size: 0.66rem;
+    font-weight: 750;
+}
+
+.reader-note-delete {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #777777;
+    cursor: pointer;
+}
+
+.reader-note-delete:hover,
+.reader-note-delete:focus-visible {
+    background: #eeeeee;
+    color: #7a281b;
+}
+
 .reader-sidebar-footer {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1230,6 +1380,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    box-sizing: border-box;
     max-width: min(620px, calc(100% - 96px));
     padding: 6px;
     border: 1px solid rgba(166, 158, 143, 0.5);
@@ -1237,6 +1388,13 @@
     background: rgba(255, 252, 245, 0.96);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
     color: #39342b;
+}
+
+.reader-selection-actions.is-composing-note {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    width: min(390px, calc(100% - 96px));
+    max-width: min(390px, calc(100% - 96px));
 }
 
 .reader-selection-actions > span {
@@ -1286,13 +1444,78 @@
 }
 
 .reader-study-button:hover,
-.reader-study-button:focus-visible {
+.reader-study-button:focus-visible,
+.reader-study-button.is-active {
     background: #f6f3ec;
     border-color: rgba(61, 56, 47, 0.22);
 }
 
 .reader-study-button svg {
     display: block;
+}
+
+.reader-note-composer {
+    box-sizing: border-box;
+    display: grid;
+    flex: 1 0 100%;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+.reader-note-composer label {
+    color: #6c6355;
+    font-size: 0.68rem;
+    font-weight: 850;
+    text-transform: uppercase;
+}
+
+.reader-note-composer textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 74px;
+    resize: vertical;
+    padding: 8px 9px;
+    border: 1px solid rgba(61, 56, 47, 0.16);
+    border-radius: 6px;
+    outline: 0;
+    background: #ffffff;
+    color: #242424;
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.reader-note-composer textarea:focus {
+    border-color: rgba(61, 56, 47, 0.34);
+    box-shadow: 0 0 0 2px rgba(244, 196, 77, 0.18);
+}
+
+.reader-note-composer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.reader-note-composer-actions button {
+    min-height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 5px;
+    background: #eeeeee;
+    color: #4b443a;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 850;
+}
+
+.reader-note-composer-actions button:first-child {
+    background: #242424;
+    color: #ffffff;
+}
+
+.reader-note-composer-actions button:disabled {
+    cursor: wait;
+    opacity: 0.62;
 }
 
 .reader-brand-icon {
@@ -1419,6 +1642,7 @@
 .reader-stage-back svg,
 .reader-study-button svg,
 .reader-audio-button svg,
+.reader-note-delete svg,
 .reader-search-clear svg,
 .reader-nav-button svg {
     display: block;

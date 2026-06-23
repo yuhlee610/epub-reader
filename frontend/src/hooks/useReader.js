@@ -1,7 +1,9 @@
 import {useEffect, useRef, useState} from 'react';
 import {
+  DeleteReaderNote,
   GetReaderBook,
   SaveReaderAppearance,
+  SaveReaderNote,
   SaveReadingProgress,
 } from '../../wailsjs/go/main/App';
 
@@ -191,6 +193,59 @@ export function useReader() {
     }
   }
 
+  async function saveReaderNote(note) {
+    const currentReaderBook = readerBookRef.current;
+    if (!currentReaderBook?.book?.id) {
+      return null;
+    }
+
+    const bookID = currentReaderBook.book.id;
+    try {
+      const nextBook = await SaveReaderNote(bookID, note);
+      updateReaderBook(nextBook);
+      return nextBook;
+    } catch (err) {
+      setReaderError(readerErrorMessage(err));
+      return null;
+    }
+  }
+
+  async function deleteReaderNote(noteID) {
+    const currentReaderBook = readerBookRef.current;
+    if (!currentReaderBook?.book?.id || !noteID) {
+      return null;
+    }
+
+    const bookID = currentReaderBook.book.id;
+    try {
+      const nextBook = await DeleteReaderNote(bookID, noteID);
+      updateReaderBook(nextBook);
+      return nextBook;
+    } catch (err) {
+      setReaderError(readerErrorMessage(err));
+      return null;
+    }
+  }
+
+  function updateReaderBook(nextBook) {
+    if (!nextBook?.id) {
+      return;
+    }
+
+    setReaderBook((current) => {
+      if (!current || current.book.id !== nextBook.id) {
+        return current;
+      }
+
+      const nextReaderBook = {
+        ...current,
+        book: nextBook,
+      };
+      readerBookRef.current = nextReaderBook;
+      return nextReaderBook;
+    });
+  }
+
   function goToNextChapter() {
     goToChapter(currentChapterIndexRef.current + 1);
   }
@@ -219,6 +274,7 @@ export function useReader() {
     currentChapterIndex,
     currentChapter: readerBook?.chapters?.[currentChapterIndex] ?? null,
     currentPageIndex,
+    deleteReaderNote,
     goToChapter,
     goToNextChapter,
     goToPreviousChapter,
@@ -228,6 +284,7 @@ export function useReader() {
     readerError,
     saveCurrentPage,
     saveReaderAppearance,
+    saveReaderNote,
   };
 }
 

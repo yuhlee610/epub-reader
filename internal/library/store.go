@@ -26,6 +26,7 @@ var allowedReaderBackgroundColors = map[string]struct{}{
 }
 
 var promptIDCleanup = regexp.MustCompile(`[^a-z0-9-]+`)
+var noteIDCleanup = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // Store persists local book metadata for the desktop app.
 type Store struct {
@@ -273,6 +274,83 @@ func (s *Store) UpdatePromptConfig(id string, prompt PromptConfig) (BookMetadata
 	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
 }
 
+// SaveReaderNote creates or updates one note/highlight for a book.
+func (s *Store) SaveReaderNote(id string, note ReaderNote) (BookMetadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := s.readLibrary()
+	if err != nil {
+		return BookMetadata{}, err
+	}
+
+	for i := range file.Books {
+		if file.Books[i].ID != strings.TrimSpace(id) {
+			continue
+		}
+
+		prepared := normalizeReaderNote(note, s.timeProvider())
+		replaced := false
+		for noteIndex := range file.Books[i].Notes {
+			if file.Books[i].Notes[noteIndex].ID == prepared.ID {
+				if note.CreatedAt.IsZero() {
+					prepared.CreatedAt = file.Books[i].Notes[noteIndex].CreatedAt
+				}
+				file.Books[i].Notes[noteIndex] = prepared
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			file.Books[i].Notes = append(file.Books[i].Notes, prepared)
+		}
+		file.Books[i].Notes = normalizeReaderNotes(file.Books[i].Notes)
+
+		if err := s.writeLibrary(file); err != nil {
+			return BookMetadata{}, err
+		}
+
+		return file.Books[i], nil
+	}
+
+	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
+}
+
+// DeleteReaderNote removes one note/highlight from a book.
+func (s *Store) DeleteReaderNote(id string, noteID string) (BookMetadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := s.readLibrary()
+	if err != nil {
+		return BookMetadata{}, err
+	}
+
+	noteID = strings.TrimSpace(noteID)
+	for i := range file.Books {
+		if file.Books[i].ID != strings.TrimSpace(id) {
+			continue
+		}
+
+		next := file.Books[i].Notes[:0]
+		for _, note := range file.Books[i].Notes {
+			if note.ID == noteID {
+				continue
+			}
+			next = append(next, note)
+		}
+		file.Books[i].Notes = normalizeReaderNotes(next)
+
+		if err := s.writeLibrary(file); err != nil {
+			return BookMetadata{}, err
+		}
+
+		return file.Books[i], nil
+	}
+
+	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
+}
+
 // prepareBook normalizes and validates metadata before it is written to disk.
 func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMetadata, error) {
 	var err error
@@ -344,8 +422,56 @@ func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMeta
 		promptUpdatedAt = s.timeProvider()
 	}
 	book.Prompt = normalizePromptConfig(book.Prompt, promptUpdatedAt)
+	if existing != nil && len(book.Notes) == 0 {
+		book.Notes = existing.Notes
+	}
+	book.Notes = normalizeReaderNotes(book.Notes)
 
 	return book, nil
+}
+
+func normalizeReaderNote(note ReaderNote, now time.Time) ReaderNote {
+	note.ID = cleanNoteID(note.ID)
+	if note.ID == "" {
+		note.ID = fmt.Sprintf("note-%d", now.UnixNano())
+	}
+	note.Text = strings.TrimSpace(note.Text)
+	note.NoteText = strings.TrimSpace(note.NoteText)
+	note.ChapterHref = strings.TrimSpace(note.ChapterHref)
+	note.ChapterTitle = strings.TrimSpace(note.ChapterTitle)
+	note.Location = strings.TrimSpace(note.Location)
+	note.Color = strings.TrimSpace(note.Color)
+	if note.ChapterIndex < 0 {
+		note.ChapterIndex = 0
+	}
+	if note.CreatedAt.IsZero() {
+		note.CreatedAt = now
+	}
+	note.UpdatedAt = now
+
+	return note
+}
+
+func normalizeReaderNotes(notes []ReaderNote) []ReaderNote {
+	normalized := make([]ReaderNote, 0, len(notes))
+	seen := map[string]struct{}{}
+	for _, note := range notes {
+		note = normalizeReaderNote(note, note.CreatedAt)
+		if note.Text == "" || note.ChapterHref == "" || note.ID == "" {
+			continue
+		}
+		if _, exists := seen[note.ID]; exists {
+			continue
+		}
+		seen[note.ID] = struct{}{}
+		normalized = append(normalized, note)
+	}
+
+	slices.SortFunc(normalized, func(a, b ReaderNote) int {
+		return b.CreatedAt.Compare(a.CreatedAt)
+	})
+
+	return normalized
 }
 
 func normalizePromptConfig(prompt PromptConfig, updatedAt time.Time) PromptConfig {
@@ -499,6 +625,17 @@ func cleanPromptID(value string) string {
 	value = strings.Trim(value, "-")
 	if len(value) > 48 {
 		value = strings.Trim(value[:48], "-")
+	}
+	return value
+}
+
+func cleanNoteID(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, "_", "-")
+	value = noteIDCleanup.ReplaceAllString(value, "-")
+	value = strings.Trim(value, "-")
+	if len(value) > 64 {
+		value = strings.Trim(value[:64], "-")
 	}
 	return value
 }

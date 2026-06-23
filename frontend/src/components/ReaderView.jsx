@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Trash2,
   Volume2,
   X,
 } from 'lucide-react';
@@ -81,9 +82,11 @@ export function ReaderView({
   isLoading,
   onClose,
   onAppearanceChange,
+  onDeleteNote,
   onNext,
   onPageChange,
   onPrevious,
+  onSaveNote,
   onSelectChapter,
   readerBook,
 }) {
@@ -100,6 +103,7 @@ export function ReaderView({
   const chapterIndexRef = useRef(chapterIndex);
   const onSelectChapterRef = useRef(onSelectChapter);
   const studyMessageTimeoutRef = useRef(null);
+  const noteInputRef = useRef(null);
   const [contentWidth, setContentWidth] = useState(1);
   const [pageCount, setPageCount] = useState(1);
   const [pageIndex, setPageIndex] = useState(0);
@@ -112,10 +116,14 @@ export function ReaderView({
   const [selectedStudyText, setSelectedStudyText] = useState('');
   const [selectionToolbarPosition, setSelectionToolbarPosition] = useState(null);
   const [studyActionMessage, setStudyActionMessage] = useState('');
+  const [isNoteComposerOpen, setIsNoteComposerOpen] = useState(false);
+  const [draftNoteText, setDraftNoteText] = useState('');
   const [geminiResponse, setGeminiResponse] = useState(null);
   const [geminiError, setGeminiError] = useState('');
   const [activeGeminiPromptID, setActiveGeminiPromptID] = useState('');
   const [readerSearchTarget, setReaderSearchTarget] = useState(null);
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [notesPanelRequestID, setNotesPanelRequestID] = useState(0);
   const chapterCount = readerBook?.chapters?.length ?? 0;
   const currentBook = readerBook?.book;
 
@@ -138,6 +146,8 @@ export function ReaderView({
     setSelectedStudyText('');
     setSelectionToolbarPosition(null);
     setStudyActionMessage('');
+    setIsNoteComposerOpen(false);
+    setDraftNoteText('');
     setGeminiError('');
     setActiveGeminiPromptID('');
   }, [chapter?.href]);
@@ -151,6 +161,12 @@ export function ReaderView({
     window.clearTimeout(positioningTimeoutRef.current);
     window.clearTimeout(studyMessageTimeoutRef.current);
   }, []);
+
+  useEffect(() => {
+    if (isNoteComposerOpen) {
+      noteInputRef.current?.focus();
+    }
+  }, [isNoteComposerOpen]);
 
   useEffect(() => {
     const page = pageRef.current;
@@ -400,9 +416,66 @@ export function ReaderView({
     }, 3600);
   }, []);
 
+  const saveSelectedNote = useCallback(async () => {
+    const selectedText = cleanSelectedText(selectedStudyText);
+    const noteText = normalizeNoteText(draftNoteText);
+    if (!selectedText) {
+      showStudyMessage('Select text in the page first.');
+      return;
+    }
+    if (!currentBook?.id || !chapter) {
+      showStudyMessage('No open book for this note.');
+      return;
+    }
+
+    setIsSavingNote(true);
+    try {
+      const nextBook = await onSaveNote?.({
+        text: selectedText,
+        noteText,
+        chapterHref: chapter.href,
+        chapterIndex,
+        chapterTitle: chapter.title || `Chapter ${chapterIndex + 1}`,
+        location: readerPageLocation(pageIndex, progressPercent),
+        color: '#facd4d',
+      });
+      if (nextBook) {
+        setSelectedStudyText('');
+        setSelectionToolbarPosition(null);
+        setIsNoteComposerOpen(false);
+        setDraftNoteText('');
+        setIsTocOpen(true);
+        setNotesPanelRequestID((requestID) => requestID + 1);
+        showStudyMessage(noteText ? 'Saved note to Notes.' : 'Saved highlight to Notes.');
+      } else {
+        showStudyMessage('Could not save note. Please try again.');
+      }
+    } catch (error) {
+      showStudyMessage(error?.message ?? 'Could not save note. Please try again.');
+    } finally {
+      setIsSavingNote(false);
+    }
+  }, [
+    chapter,
+    chapterIndex,
+    currentBook?.id,
+    draftNoteText,
+    onSaveNote,
+    pageIndex,
+    progressPercent,
+    selectedStudyText,
+    showStudyMessage,
+  ]);
+
   const updateSelectedStudyText = useCallback(() => {
     const selectionDetails = selectedReaderDetails(contentRef.current, stageRef.current);
-    setSelectedStudyText(selectionDetails.text);
+    setSelectedStudyText((currentText) => {
+      if (currentText !== selectionDetails.text) {
+        setIsNoteComposerOpen(false);
+        setDraftNoteText('');
+      }
+      return selectionDetails.text;
+    });
     setSelectionToolbarPosition(selectionDetails.position);
     if (selectionDetails.text) {
       setStudyActionMessage('');
@@ -562,6 +635,54 @@ export function ReaderView({
     }
   }, [chapter?.title, currentBook?.id, selectedStudyText, showStudyMessage]);
 
+  const selectReaderNote = useCallback((note) => {
+    if (!note) {
+      return;
+    }
+
+    const notePageIndex = pageIndexFromLocation(note.location);
+    setReaderSearchTarget({
+      id: `note:${note.id}`,
+      chapterHref: note.chapterHref,
+      chapterIndex: note.chapterIndex,
+      occurrenceIndex: 0,
+      query: note.text,
+    });
+
+    if (note.chapterIndex !== chapterIndex) {
+      onSelectChapter(note.chapterIndex, notePageIndex, null, {deferProgress: true});
+      return;
+    }
+
+    if (notePageIndex !== pageIndex) {
+      requestedPageIndexRef.current = null;
+      setIsPageContentHidden(false);
+      setIsPagePositioning(false);
+      setPageIndex(notePageIndex);
+      saveVisiblePage(notePageIndex, readingProgressPercent(
+        chapterIndex,
+        chapterCount,
+        notePageIndex,
+        pageCount,
+      ));
+    }
+  }, [
+    chapterCount,
+    chapterIndex,
+    onSelectChapter,
+    pageCount,
+    pageIndex,
+    saveVisiblePage,
+  ]);
+
+  const deleteReaderNote = useCallback(async (noteID) => {
+    const nextBook = await onDeleteNote?.(noteID);
+    if (nextBook && readerSearchTarget?.id === `note:${noteID}`) {
+      clearSearchTarget();
+    }
+    return nextBook;
+  }, [clearSearchTarget, onDeleteNote, readerSearchTarget?.id]);
+
   useEffect(() => {
     function handleKeyDown(event) {
       if (shouldIgnoreReaderShortcut(event)) {
@@ -679,6 +800,7 @@ export function ReaderView({
   const studyPrompts = normalizeStudyPrompts(currentBook?.prompt?.prompts);
   const translationPrompts = studyPrompts.filter(isTranslationPrompt);
   const geminiPrompts = studyPrompts.filter((prompt) => !isTranslationPrompt(prompt));
+  const readerNotes = normalizeReaderNotes(currentBook?.notes);
   const googleTranslateActions = translationPrompts.length > 0
     ? translationPrompts
     : [{id: 'google-translate', name: 'Translate', shortLabel: 'TR'}];
@@ -706,9 +828,13 @@ export function ReaderView({
           onClose={onClose}
           onAppearanceChange={onAppearanceChange}
           onClearSearchTarget={clearSearchTarget}
+          onDeleteNote={deleteReaderNote}
           onSelectSearchResult={selectSearchResult}
           onSelectChapter={onSelectChapter}
+          onSelectNote={selectReaderNote}
           onToggleToc={() => setIsTocOpen(false)}
+          notesPanelRequestID={notesPanelRequestID}
+          notes={readerNotes}
         />
       )}
 
@@ -778,12 +904,32 @@ export function ReaderView({
 
         {selectedStudyText && (
           <div
-            className="reader-selection-actions"
+            className={
+              isNoteComposerOpen
+                ? 'reader-selection-actions is-composing-note'
+                : 'reader-selection-actions'
+            }
             role="toolbar"
             aria-label="Selected text study actions"
             style={selectionToolbarStyle(selectionToolbarPosition)}
           >
             <span>{selectedStudyText.length} chars selected</span>
+            <button
+              aria-expanded={isNoteComposerOpen}
+              aria-label="Save selected text to notes"
+              className={
+                isNoteComposerOpen
+                  ? 'reader-study-button reader-gemini-prompt-button is-active'
+                  : 'reader-study-button reader-gemini-prompt-button'
+              }
+              disabled={isSavingNote}
+              onClick={() => setIsNoteComposerOpen((isOpen) => !isOpen)}
+              title="Add a note to selected text"
+              type="button"
+            >
+              <Edit3 aria-hidden="true" size={15} strokeWidth={2} />
+              <span>Note</span>
+            </button>
             {googleTranslateActions.map((prompt) => (
               <button
                 aria-label="Translate selected text with Google Translate"
@@ -812,6 +958,47 @@ export function ReaderView({
                 <span>{prompt.shortLabel}</span>
               </button>
             ))}
+            {isNoteComposerOpen && (
+              <form
+                className="reader-note-composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveSelectedNote();
+                }}
+              >
+                <label htmlFor="reader-note-input">Your note</label>
+                <textarea
+                  id="reader-note-input"
+                  maxLength={2000}
+                  onChange={(event) => setDraftNoteText(event.target.value)}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === 'Escape') {
+                      setIsNoteComposerOpen(false);
+                      setDraftNoteText('');
+                    }
+                  }}
+                  placeholder="Write a note for this selected text..."
+                  ref={noteInputRef}
+                  rows={3}
+                  value={draftNoteText}
+                />
+                <div className="reader-note-composer-actions">
+                  <button disabled={isSavingNote} type="submit">
+                    Save note
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsNoteComposerOpen(false);
+                      setDraftNoteText('');
+                    }}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         )}
 
@@ -1259,9 +1446,48 @@ function isTranslationPrompt(prompt) {
   return id === 'translate' || name === 'translate' || name.includes('translation');
 }
 
+function normalizeReaderNotes(notes) {
+  return (notes ?? [])
+    .map((note) => ({
+      id: String(note?.id || '').trim(),
+      text: cleanSelectedText(note?.text || ''),
+      noteText: String(note?.noteText || '').trim(),
+      chapterHref: String(note?.chapterHref || '').trim(),
+      chapterIndex: Number.isInteger(note?.chapterIndex) ? note.chapterIndex : 0,
+      chapterTitle: String(note?.chapterTitle || '').trim(),
+      location: String(note?.location || '').trim(),
+      color: String(note?.color || '').trim(),
+      createdAt: note?.createdAt,
+    }))
+    .filter((note) => note.id && note.text && note.chapterHref)
+    .sort((a, b) => noteTimeValue(b.createdAt) - noteTimeValue(a.createdAt));
+}
+
+function noteTimeValue(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function formatNoteDate(value) {
+  const time = new Date(value || 0);
+  if (!Number.isFinite(time.getTime()) || time.getTime() === 0) {
+    return 'Saved note';
+  }
+
+  return time.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function selectedTextPreview(value) {
   const text = cleanSelectedText(value);
   return text.length > 180 ? `${text.slice(0, 180).trim()}...` : text;
+}
+
+function normalizeNoteText(value) {
+  return String(value || '').trim().slice(0, 2000);
 }
 
 function speakText(value, lang) {
@@ -1365,6 +1591,19 @@ function readingProgressPercent(chapterIndex, chapterCount, pageIndex, pageCount
   return Math.min(100, Math.max(0, Math.round(bookProgress * 100)));
 }
 
+function readerPageLocation(pageIndex, percent) {
+  const parts = [`page:${Math.max(0, pageIndex)}`];
+  if (Number.isFinite(percent)) {
+    parts.push(`percent:${Math.min(100, Math.max(0, Math.round(percent)))}`);
+  }
+  return parts.join(';');
+}
+
+function pageIndexFromLocation(location) {
+  const match = /(?:^|;)page:(\d+)(?:;|$)/.exec(String(location || ''));
+  return match ? Number(match[1]) : 0;
+}
+
 function clampRatio(value) {
   return Math.min(1, Math.max(0, value));
 }
@@ -1412,15 +1651,29 @@ function ReaderSidebar({
   appearance,
   book,
   chapters,
+  notes,
+  notesPanelRequestID,
   onClose,
   onAppearanceChange,
   onClearSearchTarget,
+  onDeleteNote,
   onSelectSearchResult,
   onSelectChapter,
+  onSelectNote,
   onToggleToc,
 }) {
+  const [activeFooterTab, setActiveFooterTab] = useState('toc');
   const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    if (notesPanelRequestID > 0) {
+      setIsSearchOpen(false);
+      setIsAppearanceOpen(false);
+      onClearSearchTarget?.();
+      setActiveFooterTab('notes');
+    }
+  }, [notesPanelRequestID, onClearSearchTarget]);
 
   function closeSearch() {
     setIsSearchOpen(false);
@@ -1429,6 +1682,7 @@ function ReaderSidebar({
 
   function toggleSearch() {
     setIsAppearanceOpen(false);
+    setActiveFooterTab('toc');
     setIsSearchOpen((isOpen) => {
       if (isOpen) {
         onClearSearchTarget?.();
@@ -1447,6 +1701,15 @@ function ReaderSidebar({
       return false;
     });
     setIsAppearanceOpen((isOpen) => !isOpen);
+  }
+
+  function selectFooterTab(tab) {
+    setIsSearchOpen(false);
+    setIsAppearanceOpen(false);
+    if (tab !== 'toc') {
+      onClearSearchTarget?.();
+    }
+    setActiveFooterTab(tab);
   }
 
   return (
@@ -1569,6 +1832,17 @@ function ReaderSidebar({
           onClose={closeSearch}
           onSelectResult={onSelectSearchResult}
         />
+      ) : activeFooterTab === 'notes' ? (
+        <ReaderNotesPanel
+          notes={notes}
+          onDeleteNote={onDeleteNote}
+          onSelectNote={onSelectNote}
+        />
+      ) : activeFooterTab === 'bookmarks' ? (
+        <ReaderPanelEmpty
+          title="No bookmarks yet"
+          message="Bookmarks will appear here after you save reading locations."
+        />
       ) : (
         <ol className="reader-toc">
           {chapters.map((chapter) => (
@@ -1593,27 +1867,94 @@ function ReaderSidebar({
       <div className="reader-sidebar-footer">
         <button
           aria-label="Table of contents"
-          className="reader-footer-button is-active"
+          className={activeFooterTab === 'toc' ? 'reader-footer-button is-active' : 'reader-footer-button'}
+          onClick={() => selectFooterTab('toc')}
           type="button"
         >
           <List aria-hidden="true" size={17} strokeWidth={2} />
         </button>
         <button
           aria-label="Notes"
-          className="reader-footer-button"
+          className={activeFooterTab === 'notes' ? 'reader-footer-button is-active' : 'reader-footer-button'}
+          onClick={() => selectFooterTab('notes')}
           type="button"
         >
           <Edit3 aria-hidden="true" size={17} strokeWidth={2} />
         </button>
         <button
           aria-label="Bookmarks"
-          className="reader-footer-button"
+          className={activeFooterTab === 'bookmarks' ? 'reader-footer-button is-active' : 'reader-footer-button'}
+          onClick={() => selectFooterTab('bookmarks')}
           type="button"
         >
           <Bookmark aria-hidden="true" size={17} strokeWidth={2} />
         </button>
       </div>
     </aside>
+  );
+}
+
+function ReaderNotesPanel({notes, onDeleteNote, onSelectNote}) {
+  if (!notes || notes.length === 0) {
+    return (
+      <ReaderPanelEmpty
+        title="No notes yet"
+        message="Select text in the reader and press Note to save highlights here."
+      />
+    );
+  }
+
+  return (
+    <section className="reader-notes-panel" aria-label="Notes and highlights">
+      <div className="reader-notes-count">
+        {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+      </div>
+      <ol className="reader-notes-list">
+        {notes.map((note) => (
+          <li key={note.id}>
+            <div className="reader-note-item">
+              <button
+                className="reader-note-jump"
+                onClick={() => onSelectNote?.(note)}
+                type="button"
+              >
+                <span
+                  className="reader-note-color"
+                  style={{'--note-color': note.color || '#facd4d'}}
+                  aria-hidden="true"
+                />
+                <span className="reader-note-body">
+                  <strong>{note.chapterTitle || `Chapter ${note.chapterIndex + 1}`}</strong>
+                  {note.noteText && (
+                    <span className="reader-note-user-text">{note.noteText}</span>
+                  )}
+                  <span className="reader-note-quote">{note.text}</span>
+                  <small>{formatNoteDate(note.createdAt)}</small>
+                </span>
+              </button>
+              <button
+                aria-label="Delete note"
+                className="reader-note-delete"
+                onClick={() => onDeleteNote?.(note.id)}
+                title="Delete note"
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={14} strokeWidth={2} />
+              </button>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function ReaderPanelEmpty({title, message}) {
+  return (
+    <section className="reader-panel-empty" aria-label={title}>
+      <strong>{title}</strong>
+      <p>{message}</p>
+    </section>
   );
 }
 

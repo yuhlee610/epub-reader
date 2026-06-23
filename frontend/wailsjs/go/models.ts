@@ -1,5 +1,55 @@
 export namespace library {
+
+	export class ReaderNote {
+	    id: string;
+	    text: string;
+	    noteText?: string;
+	    chapterHref: string;
+	    chapterIndex: number;
+	    chapterTitle?: string;
+	    location?: string;
+	    color?: string;
+	    // Go type: time
+	    createdAt: any;
+	    // Go type: time
+	    updatedAt?: any;
+
+	    static createFrom(source: any = {}) {
+	        return new ReaderNote(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.text = source["text"];
+	        this.noteText = source["noteText"];
+	        this.chapterHref = source["chapterHref"];
+	        this.chapterIndex = source["chapterIndex"];
+	        this.chapterTitle = source["chapterTitle"];
+	        this.location = source["location"];
+	        this.color = source["color"];
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	    }
 	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ReaderAppearance {
 	    backgroundColor?: string;
 	    fontSize?: number;
@@ -119,6 +169,7 @@ export namespace library {
 	    progress: ReadingProgress;
 	    prompt: PromptConfig;
 	    appearance: ReaderAppearance;
+	    notes?: ReaderNote[];
 	
 	    static createFrom(source: any = {}) {
 	        return new BookMetadata(source);
@@ -135,6 +186,7 @@ export namespace library {
 	        this.progress = this.convertValues(source["progress"], ReadingProgress);
 	        this.prompt = this.convertValues(source["prompt"], PromptConfig);
 	        this.appearance = this.convertValues(source["appearance"], ReaderAppearance);
+	        this.notes = this.convertValues(source["notes"], ReaderNote);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -209,8 +261,9 @@ export namespace library {
 		    return a;
 		}
 	}
-	
-	
+
+
+
 	export class StorageInfo {
 	    rootDir: string;
 	    booksDir: string;
@@ -346,4 +399,3 @@ export namespace main {
 	}
 
 }
-

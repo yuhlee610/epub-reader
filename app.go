@@ -175,6 +175,26 @@ func (a *App) SaveBookPrompt(id string, prompt library.PromptConfig) (library.Bo
 	return store.UpdatePromptConfig(id, prompt)
 }
 
+// SaveReaderNote persists one reader note or highlight for a book.
+func (a *App) SaveReaderNote(id string, note library.ReaderNote) (library.BookMetadata, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.BookMetadata{}, err
+	}
+
+	return store.SaveReaderNote(id, note)
+}
+
+// DeleteReaderNote removes one reader note or highlight from a book.
+func (a *App) DeleteReaderNote(id string, noteID string) (library.BookMetadata, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.BookMetadata{}, err
+	}
+
+	return store.DeleteReaderNote(id, noteID)
+}
+
 // SaveBookMetadata creates or updates one book metadata record.
 func (a *App) SaveBookMetadata(book library.BookMetadata) (library.BookMetadata, error) {
 	store, err := a.libraryStore()

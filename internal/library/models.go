@@ -20,6 +20,7 @@ type BookMetadata struct {
 	Progress         ReadingProgress  `json:"progress"`
 	Prompt           PromptConfig     `json:"prompt"`
 	Appearance       ReaderAppearance `json:"appearance"`
+	Notes            []ReaderNote     `json:"notes,omitempty"`
 }
 
 // ReadingProgress stores the user's last known location in a book.
@@ -51,6 +52,20 @@ type StudyPrompt struct {
 type ReaderAppearance struct {
 	BackgroundColor string `json:"backgroundColor,omitempty"`
 	FontSize        int    `json:"fontSize,omitempty"`
+}
+
+// ReaderNote stores a selected passage or highlight for one book.
+type ReaderNote struct {
+	ID           string    `json:"id"`
+	Text         string    `json:"text"`
+	NoteText     string    `json:"noteText,omitempty"`
+	ChapterHref  string    `json:"chapterHref"`
+	ChapterIndex int       `json:"chapterIndex"`
+	ChapterTitle string    `json:"chapterTitle,omitempty"`
+	Location     string    `json:"location,omitempty"`
+	Color        string    `json:"color,omitempty"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt,omitempty"`
 }
 
 // ReaderBook is the UI-facing payload for opening one imported EPUB.

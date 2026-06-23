@@ -26,8 +26,10 @@ function App() {
           }}
           onNext={reader.goToNextChapter}
           onAppearanceChange={reader.saveReaderAppearance}
+          onDeleteNote={reader.deleteReaderNote}
           onPageChange={reader.saveCurrentPage}
           onPrevious={reader.goToPreviousChapter}
+          onSaveNote={reader.saveReaderNote}
           onSelectChapter={reader.goToChapter}
           readerBook={reader.readerBook}
         />

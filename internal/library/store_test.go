@@ -138,6 +138,65 @@ func TestSaveBookUpdatePreservesImportedAtWhenOmitted(t *testing.T) {
 	}
 }
 
+// TestSaveAndDeleteReaderNotePersistsBookNotes verifies reader notes are
+// stored per book, survive reload, and can be removed.
+func TestSaveAndDeleteReaderNotePersistsBookNotes(t *testing.T) {
+	store := newTestStore(t)
+
+	book, err := store.SaveBook(BookMetadata{
+		Title:            "Cradle",
+		OriginalFileName: "cradle.epub",
+	})
+	if err != nil {
+		t.Fatalf("SaveBook() error = %v", err)
+	}
+
+	withNote, err := store.SaveReaderNote(book.ID, ReaderNote{
+		ID:           "Note 1",
+		Text:         "The Unsouled kept walking.",
+		NoteText:     "Remember this character beat.",
+		ChapterHref:  "chapter-1.xhtml",
+		ChapterIndex: 1,
+		ChapterTitle: "Chapter 1",
+		Location:     "page:2;percent:12",
+		Color:        "#facd4d",
+	})
+	if err != nil {
+		t.Fatalf("SaveReaderNote() error = %v", err)
+	}
+	if len(withNote.Notes) != 1 {
+		t.Fatalf("Notes length = %d, want 1", len(withNote.Notes))
+	}
+	if withNote.Notes[0].ID != "note-1" {
+		t.Fatalf("note ID = %q, want cleaned note-1", withNote.Notes[0].ID)
+	}
+	if withNote.Notes[0].CreatedAt.IsZero() || withNote.Notes[0].UpdatedAt.IsZero() {
+		t.Fatalf("note timestamps were not set: %#v", withNote.Notes[0])
+	}
+
+	reloaded, err := NewStore(store.Info().RootDir)
+	if err != nil {
+		t.Fatalf("reload NewStore() error = %v", err)
+	}
+	got, err := reloaded.GetBook(book.ID)
+	if err != nil {
+		t.Fatalf("GetBook() error = %v", err)
+	}
+	if len(got.Notes) != 1 ||
+		got.Notes[0].Text != "The Unsouled kept walking." ||
+		got.Notes[0].NoteText != "Remember this character beat." {
+		t.Fatalf("persisted notes = %#v, want saved note", got.Notes)
+	}
+
+	withoutNote, err := reloaded.DeleteReaderNote(book.ID, "note-1")
+	if err != nil {
+		t.Fatalf("DeleteReaderNote() error = %v", err)
+	}
+	if len(withoutNote.Notes) != 0 {
+		t.Fatalf("Notes length after delete = %d, want 0", len(withoutNote.Notes))
+	}
+}
+
 // TestSaveBookRejectsPathOutsideManagedStorage verifies metadata cannot point
 // at a file outside the app-managed books directory.
 func TestSaveBookRejectsPathOutsideManagedStorage(t *testing.T) {
