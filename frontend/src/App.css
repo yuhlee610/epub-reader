@@ -1191,6 +1191,138 @@
     color: #7a281b;
 }
 
+.reader-bookmarks-panel {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 8px;
+    min-height: 0;
+    padding: 6px 5px 8px;
+}
+
+.reader-bookmark-actions {
+    padding: 0 4px;
+}
+
+.reader-bookmark-action {
+    display: inline-grid;
+    grid-template-columns: 16px auto;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: #242424;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 0.74rem;
+    font-weight: 850;
+}
+
+.reader-bookmark-action.is-saved {
+    background: #eeeeee;
+    color: #5f5f5f;
+}
+
+.reader-bookmark-action:hover,
+.reader-bookmark-action:focus-visible {
+    filter: brightness(0.96);
+}
+
+.reader-bookmarks-count {
+    padding: 2px 4px;
+    color: #5f5f5f;
+    font-size: 0.72rem;
+    font-weight: 750;
+    text-transform: uppercase;
+}
+
+.reader-bookmarks-list {
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.reader-bookmark-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 4px;
+    align-items: start;
+    margin-bottom: 4px;
+    border-radius: 6px;
+}
+
+.reader-bookmark-jump {
+    display: grid;
+    width: 100%;
+    padding: 8px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #4f4f4f;
+    cursor: pointer;
+    text-align: left;
+}
+
+.reader-bookmark-jump:hover,
+.reader-bookmark-jump:focus-visible,
+.reader-bookmark-jump.is-active {
+    background: #e9e9e9;
+}
+
+.reader-bookmark-body {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.reader-bookmark-body strong {
+    overflow: hidden;
+    font-size: 0.74rem;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-bookmark-body span,
+.reader-bookmark-body small {
+    overflow: hidden;
+    color: #777777;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-bookmark-body .reader-bookmark-snippet {
+    display: -webkit-box;
+    white-space: normal;
+    line-height: 1.34;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.reader-bookmark-delete {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #777777;
+    cursor: pointer;
+}
+
+.reader-bookmark-delete:hover,
+.reader-bookmark-delete:focus-visible {
+    background: #eeeeee;
+    color: #7a281b;
+}
+
 .reader-sidebar-footer {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1642,6 +1774,8 @@
 .reader-stage-back svg,
 .reader-study-button svg,
 .reader-audio-button svg,
+.reader-bookmark-action svg,
+.reader-bookmark-delete svg,
 .reader-note-delete svg,
 .reader-search-clear svg,
 .reader-nav-button svg {

@@ -1,8 +1,10 @@
 import {useEffect, useRef, useState} from 'react';
 import {
+  DeleteReaderBookmark,
   DeleteReaderNote,
   GetReaderBook,
   SaveReaderAppearance,
+  SaveReaderBookmark,
   SaveReaderNote,
   SaveReadingProgress,
 } from '../../wailsjs/go/main/App';
@@ -227,6 +229,40 @@ export function useReader() {
     }
   }
 
+  async function saveReaderBookmark(bookmark) {
+    const currentReaderBook = readerBookRef.current;
+    if (!currentReaderBook?.book?.id) {
+      return null;
+    }
+
+    const bookID = currentReaderBook.book.id;
+    try {
+      const nextBook = await SaveReaderBookmark(bookID, bookmark);
+      updateReaderBook(nextBook);
+      return nextBook;
+    } catch (err) {
+      setReaderError(readerErrorMessage(err));
+      return null;
+    }
+  }
+
+  async function deleteReaderBookmark(bookmarkID) {
+    const currentReaderBook = readerBookRef.current;
+    if (!currentReaderBook?.book?.id || !bookmarkID) {
+      return null;
+    }
+
+    const bookID = currentReaderBook.book.id;
+    try {
+      const nextBook = await DeleteReaderBookmark(bookID, bookmarkID);
+      updateReaderBook(nextBook);
+      return nextBook;
+    } catch (err) {
+      setReaderError(readerErrorMessage(err));
+      return null;
+    }
+  }
+
   function updateReaderBook(nextBook) {
     if (!nextBook?.id) {
       return;
@@ -274,6 +310,7 @@ export function useReader() {
     currentChapterIndex,
     currentChapter: readerBook?.chapters?.[currentChapterIndex] ?? null,
     currentPageIndex,
+    deleteReaderBookmark,
     deleteReaderNote,
     goToChapter,
     goToNextChapter,
@@ -283,6 +320,7 @@ export function useReader() {
     readerBook,
     readerError,
     saveCurrentPage,
+    saveReaderBookmark,
     saveReaderAppearance,
     saveReaderNote,
   };

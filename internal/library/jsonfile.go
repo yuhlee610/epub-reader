@@ -34,6 +34,7 @@ func (s *Store) readLibrary() (libraryFile, error) {
 		file.Books[i].Appearance = normalizeReaderAppearance(file.Books[i].Appearance)
 		file.Books[i].Prompt = normalizePromptConfig(file.Books[i].Prompt, file.Books[i].Prompt.UpdatedAt)
 		file.Books[i].Notes = normalizeReaderNotes(file.Books[i].Notes)
+		file.Books[i].Bookmarks = normalizeReaderBookmarks(file.Books[i].Bookmarks)
 	}
 
 	return file, nil

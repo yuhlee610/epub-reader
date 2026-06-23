@@ -6,6 +6,10 @@ export function DeleteBookMetadata(arg1) {
   return window['go']['main']['App']['DeleteBookMetadata'](arg1);
 }
 
+export function DeleteReaderBookmark(arg1, arg2) {
+  return window['go']['main']['App']['DeleteReaderBookmark'](arg1, arg2);
+}
+
 export function DeleteReaderNote(arg1, arg2) {
   return window['go']['main']['App']['DeleteReaderNote'](arg1, arg2);
 }
@@ -48,6 +52,10 @@ export function SaveBookPrompt(arg1, arg2) {
 
 export function SaveReaderAppearance(arg1, arg2) {
   return window['go']['main']['App']['SaveReaderAppearance'](arg1, arg2);
+}
+
+export function SaveReaderBookmark(arg1, arg2) {
+  return window['go']['main']['App']['SaveReaderBookmark'](arg1, arg2);
 }
 
 export function SaveReaderNote(arg1, arg2) {

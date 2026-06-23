@@ -197,6 +197,82 @@ func TestSaveAndDeleteReaderNotePersistsBookNotes(t *testing.T) {
 	}
 }
 
+// TestSaveAndDeleteReaderBookmarkPersistsBookBookmarks verifies bookmarks are
+// stored per book, deduplicated by location, survive reload, and can be removed.
+func TestSaveAndDeleteReaderBookmarkPersistsBookBookmarks(t *testing.T) {
+	store := newTestStore(t)
+
+	book, err := store.SaveBook(BookMetadata{
+		Title:            "Cradle",
+		OriginalFileName: "cradle.epub",
+	})
+	if err != nil {
+		t.Fatalf("SaveBook() error = %v", err)
+	}
+
+	withBookmark, err := store.SaveReaderBookmark(book.ID, ReaderBookmark{
+		ID:              "Bookmark 1",
+		Title:           "Chapter 1 - 12%",
+		ChapterHref:     "chapter-1.xhtml",
+		ChapterIndex:    1,
+		ChapterTitle:    "Chapter 1",
+		Location:        "page:2;percent:12",
+		Snippet:         "The Unsouled kept walking.",
+		ProgressPercent: 12,
+	})
+	if err != nil {
+		t.Fatalf("SaveReaderBookmark() error = %v", err)
+	}
+	if len(withBookmark.Bookmarks) != 1 {
+		t.Fatalf("Bookmarks length = %d, want 1", len(withBookmark.Bookmarks))
+	}
+	if withBookmark.Bookmarks[0].ID != "bookmark-1" {
+		t.Fatalf("bookmark ID = %q, want cleaned bookmark-1", withBookmark.Bookmarks[0].ID)
+	}
+	if withBookmark.Bookmarks[0].CreatedAt.IsZero() || withBookmark.Bookmarks[0].UpdatedAt.IsZero() {
+		t.Fatalf("bookmark timestamps were not set: %#v", withBookmark.Bookmarks[0])
+	}
+
+	deduped, err := store.SaveReaderBookmark(book.ID, ReaderBookmark{
+		ID:              "Bookmark duplicate",
+		Title:           "Updated title",
+		ChapterHref:     "chapter-1.xhtml",
+		ChapterIndex:    1,
+		ChapterTitle:    "Chapter 1",
+		Location:        "page:2;percent:12",
+		Snippet:         "Updated snippet.",
+		ProgressPercent: 12,
+	})
+	if err != nil {
+		t.Fatalf("duplicate SaveReaderBookmark() error = %v", err)
+	}
+	if len(deduped.Bookmarks) != 1 || deduped.Bookmarks[0].Title != "Updated title" {
+		t.Fatalf("deduped bookmarks = %#v, want one updated bookmark", deduped.Bookmarks)
+	}
+
+	reloaded, err := NewStore(store.Info().RootDir)
+	if err != nil {
+		t.Fatalf("reload NewStore() error = %v", err)
+	}
+	got, err := reloaded.GetBook(book.ID)
+	if err != nil {
+		t.Fatalf("GetBook() error = %v", err)
+	}
+	if len(got.Bookmarks) != 1 ||
+		got.Bookmarks[0].Title != "Updated title" ||
+		got.Bookmarks[0].Snippet != "Updated snippet." {
+		t.Fatalf("persisted bookmarks = %#v, want saved bookmark", got.Bookmarks)
+	}
+
+	withoutBookmark, err := reloaded.DeleteReaderBookmark(book.ID, got.Bookmarks[0].ID)
+	if err != nil {
+		t.Fatalf("DeleteReaderBookmark() error = %v", err)
+	}
+	if len(withoutBookmark.Bookmarks) != 0 {
+		t.Fatalf("Bookmarks length after delete = %d, want 0", len(withoutBookmark.Bookmarks))
+	}
+}
+
 // TestSaveBookRejectsPathOutsideManagedStorage verifies metadata cannot point
 // at a file outside the app-managed books directory.
 func TestSaveBookRejectsPathOutsideManagedStorage(t *testing.T) {

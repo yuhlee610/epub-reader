@@ -195,6 +195,26 @@ func (a *App) DeleteReaderNote(id string, noteID string) (library.BookMetadata, 
 	return store.DeleteReaderNote(id, noteID)
 }
 
+// SaveReaderBookmark persists one bookmark for a book.
+func (a *App) SaveReaderBookmark(id string, bookmark library.ReaderBookmark) (library.BookMetadata, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.BookMetadata{}, err
+	}
+
+	return store.SaveReaderBookmark(id, bookmark)
+}
+
+// DeleteReaderBookmark removes one bookmark from a book.
+func (a *App) DeleteReaderBookmark(id string, bookmarkID string) (library.BookMetadata, error) {
+	store, err := a.libraryStore()
+	if err != nil {
+		return library.BookMetadata{}, err
+	}
+
+	return store.DeleteReaderBookmark(id, bookmarkID)
+}
+
 // SaveBookMetadata creates or updates one book metadata record.
 func (a *App) SaveBookMetadata(book library.BookMetadata) (library.BookMetadata, error) {
 	store, err := a.libraryStore()

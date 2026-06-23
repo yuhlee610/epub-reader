@@ -1,5 +1,55 @@
 export namespace library {
 
+	export class ReaderBookmark {
+	    id: string;
+	    title?: string;
+	    chapterHref: string;
+	    chapterIndex: number;
+	    chapterTitle?: string;
+	    location: string;
+	    snippet?: string;
+	    progressPercent?: number;
+	    // Go type: time
+	    createdAt: any;
+	    // Go type: time
+	    updatedAt?: any;
+
+	    static createFrom(source: any = {}) {
+	        return new ReaderBookmark(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.chapterHref = source["chapterHref"];
+	        this.chapterIndex = source["chapterIndex"];
+	        this.chapterTitle = source["chapterTitle"];
+	        this.location = source["location"];
+	        this.snippet = source["snippet"];
+	        this.progressPercent = source["progressPercent"];
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ReaderNote {
 	    id: string;
 	    text: string;
@@ -31,7 +81,7 @@ export namespace library {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -53,11 +103,11 @@ export namespace library {
 	export class ReaderAppearance {
 	    backgroundColor?: string;
 	    fontSize?: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ReaderAppearance(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.backgroundColor = source["backgroundColor"];
@@ -71,11 +121,11 @@ export namespace library {
 	    instruction: string;
 	    sortOrder: number;
 	    isDefault?: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new StudyPrompt(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -91,18 +141,18 @@ export namespace library {
 	    prompts?: StudyPrompt[];
 	    // Go type: time
 	    updatedAt?: any;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new PromptConfig(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.customPrompt = source["customPrompt"];
 	        this.prompts = this.convertValues(source["prompts"], StudyPrompt);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -127,11 +177,11 @@ export namespace library {
 	    location?: string;
 	    // Go type: time
 	    updatedAt?: any;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ReadingProgress(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.chapterHref = source["chapterHref"];
@@ -139,7 +189,7 @@ export namespace library {
 	        this.location = source["location"];
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -170,11 +220,12 @@ export namespace library {
 	    prompt: PromptConfig;
 	    appearance: ReaderAppearance;
 	    notes?: ReaderNote[];
-	
+	    bookmarks?: ReaderBookmark[];
+
 	    static createFrom(source: any = {}) {
 	        return new BookMetadata(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -187,8 +238,9 @@ export namespace library {
 	        this.prompt = this.convertValues(source["prompt"], PromptConfig);
 	        this.appearance = this.convertValues(source["appearance"], ReaderAppearance);
 	        this.notes = this.convertValues(source["notes"], ReaderNote);
+	        this.bookmarks = this.convertValues(source["bookmarks"], ReaderBookmark);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -207,18 +259,18 @@ export namespace library {
 		    return a;
 		}
 	}
-	
-	
+
+
 	export class ReaderChapter {
 	    index: number;
 	    href: string;
 	    title: string;
 	    bodyHtml: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ReaderChapter(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.index = source["index"];
@@ -231,18 +283,18 @@ export namespace library {
 	    book: BookMetadata;
 	    chapters: ReaderChapter[];
 	    currentChapterIndex: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ReaderBook(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.book = this.convertValues(source["book"], BookMetadata);
 	        this.chapters = this.convertValues(source["chapters"], ReaderChapter);
 	        this.currentChapterIndex = source["currentChapterIndex"];
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -264,15 +316,16 @@ export namespace library {
 
 
 
+
 	export class StorageInfo {
 	    rootDir: string;
 	    booksDir: string;
 	    libraryPath: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new StorageInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.rootDir = source["rootDir"];
@@ -284,18 +337,18 @@ export namespace library {
 }
 
 export namespace main {
-	
+
 	export class GeminiStudyRequest {
 	    requestId?: string;
 	    bookId: string;
 	    promptId: string;
 	    selectedText: string;
 	    chapterTitle?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new GeminiStudyRequest(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.requestId = source["requestId"];
@@ -311,11 +364,11 @@ export namespace main {
 	    text: string;
 	    usedModel?: string;
 	    textPreview: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new GeminiStudyResponse(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.promptId = source["promptId"];
@@ -329,11 +382,11 @@ export namespace main {
 	    text: string;
 	    sourceLanguage?: string;
 	    targetLanguage?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new GoogleTranslateRequest(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.text = source["text"];
@@ -348,11 +401,11 @@ export namespace main {
 	    targetLanguage: string;
 	    pronunciationIpa?: string;
 	    textPreview: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new GoogleTranslateResponse(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.originalText = source["originalText"];
@@ -367,18 +420,18 @@ export namespace main {
 	    book: library.BookMetadata;
 	    duplicate: boolean;
 	    canceled: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ImportEPUBResult(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.book = this.convertValues(source["book"], library.BookMetadata);
 	        this.duplicate = source["duplicate"];
 	        this.canceled = source["canceled"];
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;

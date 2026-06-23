@@ -27,6 +27,7 @@ var allowedReaderBackgroundColors = map[string]struct{}{
 
 var promptIDCleanup = regexp.MustCompile(`[^a-z0-9-]+`)
 var noteIDCleanup = regexp.MustCompile(`[^a-z0-9-]+`)
+var bookmarkIDCleanup = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // Store persists local book metadata for the desktop app.
 type Store struct {
@@ -351,6 +352,85 @@ func (s *Store) DeleteReaderNote(id string, noteID string) (BookMetadata, error)
 	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
 }
 
+// SaveReaderBookmark creates or updates one bookmark for a book. Bookmarks are
+// unique per chapter and location so repeated saves toggle/update the same spot.
+func (s *Store) SaveReaderBookmark(id string, bookmark ReaderBookmark) (BookMetadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := s.readLibrary()
+	if err != nil {
+		return BookMetadata{}, err
+	}
+
+	for i := range file.Books {
+		if file.Books[i].ID != strings.TrimSpace(id) {
+			continue
+		}
+
+		prepared := normalizeReaderBookmark(bookmark, s.timeProvider())
+		replaced := false
+		for bookmarkIndex := range file.Books[i].Bookmarks {
+			existing := file.Books[i].Bookmarks[bookmarkIndex]
+			if existing.ID == prepared.ID || sameReaderBookmarkLocation(existing, prepared) {
+				if bookmark.CreatedAt.IsZero() {
+					prepared.CreatedAt = existing.CreatedAt
+				}
+				file.Books[i].Bookmarks[bookmarkIndex] = prepared
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			file.Books[i].Bookmarks = append(file.Books[i].Bookmarks, prepared)
+		}
+		file.Books[i].Bookmarks = normalizeReaderBookmarks(file.Books[i].Bookmarks)
+
+		if err := s.writeLibrary(file); err != nil {
+			return BookMetadata{}, err
+		}
+
+		return file.Books[i], nil
+	}
+
+	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
+}
+
+// DeleteReaderBookmark removes one bookmark from a book.
+func (s *Store) DeleteReaderBookmark(id string, bookmarkID string) (BookMetadata, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	file, err := s.readLibrary()
+	if err != nil {
+		return BookMetadata{}, err
+	}
+
+	bookmarkID = strings.TrimSpace(bookmarkID)
+	for i := range file.Books {
+		if file.Books[i].ID != strings.TrimSpace(id) {
+			continue
+		}
+
+		next := file.Books[i].Bookmarks[:0]
+		for _, bookmark := range file.Books[i].Bookmarks {
+			if bookmark.ID == bookmarkID {
+				continue
+			}
+			next = append(next, bookmark)
+		}
+		file.Books[i].Bookmarks = normalizeReaderBookmarks(next)
+
+		if err := s.writeLibrary(file); err != nil {
+			return BookMetadata{}, err
+		}
+
+		return file.Books[i], nil
+	}
+
+	return BookMetadata{}, fmt.Errorf("%w: %s", ErrBookNotFound, id)
+}
+
 // prepareBook normalizes and validates metadata before it is written to disk.
 func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMetadata, error) {
 	var err error
@@ -426,6 +506,10 @@ func (s *Store) prepareBook(book BookMetadata, existing *BookMetadata) (BookMeta
 		book.Notes = existing.Notes
 	}
 	book.Notes = normalizeReaderNotes(book.Notes)
+	if existing != nil && len(book.Bookmarks) == 0 {
+		book.Bookmarks = existing.Bookmarks
+	}
+	book.Bookmarks = normalizeReaderBookmarks(book.Bookmarks)
 
 	return book, nil
 }
@@ -472,6 +556,76 @@ func normalizeReaderNotes(notes []ReaderNote) []ReaderNote {
 	})
 
 	return normalized
+}
+
+func normalizeReaderBookmark(bookmark ReaderBookmark, now time.Time) ReaderBookmark {
+	bookmark.ID = cleanBookmarkID(bookmark.ID)
+	bookmark.Title = strings.TrimSpace(bookmark.Title)
+	bookmark.ChapterHref = strings.TrimSpace(bookmark.ChapterHref)
+	bookmark.ChapterTitle = strings.TrimSpace(bookmark.ChapterTitle)
+	bookmark.Location = strings.TrimSpace(bookmark.Location)
+	bookmark.Snippet = strings.TrimSpace(bookmark.Snippet)
+	if bookmark.ChapterIndex < 0 {
+		bookmark.ChapterIndex = 0
+	}
+	if bookmark.ProgressPercent < 0 {
+		bookmark.ProgressPercent = 0
+	}
+	if bookmark.ProgressPercent > 100 {
+		bookmark.ProgressPercent = 100
+	}
+	if bookmark.ID == "" {
+		bookmark.ID = cleanBookmarkID(fmt.Sprintf(
+			"bookmark-%s-%s",
+			bookmark.ChapterHref,
+			bookmark.Location,
+		))
+	}
+	if bookmark.ID == "" {
+		bookmark.ID = fmt.Sprintf("bookmark-%d", now.UnixNano())
+	}
+	if bookmark.CreatedAt.IsZero() {
+		bookmark.CreatedAt = now
+	}
+	bookmark.UpdatedAt = now
+
+	return bookmark
+}
+
+func normalizeReaderBookmarks(bookmarks []ReaderBookmark) []ReaderBookmark {
+	normalized := make([]ReaderBookmark, 0, len(bookmarks))
+	seen := map[string]struct{}{}
+	seenLocations := map[string]struct{}{}
+	for _, bookmark := range bookmarks {
+		bookmark = normalizeReaderBookmark(bookmark, bookmark.CreatedAt)
+		if bookmark.ChapterHref == "" || bookmark.Location == "" || bookmark.ID == "" {
+			continue
+		}
+		locationKey := readerBookmarkLocationKey(bookmark)
+		if _, exists := seen[bookmark.ID]; exists {
+			continue
+		}
+		if _, exists := seenLocations[locationKey]; exists {
+			continue
+		}
+		seen[bookmark.ID] = struct{}{}
+		seenLocations[locationKey] = struct{}{}
+		normalized = append(normalized, bookmark)
+	}
+
+	slices.SortFunc(normalized, func(a, b ReaderBookmark) int {
+		return b.CreatedAt.Compare(a.CreatedAt)
+	})
+
+	return normalized
+}
+
+func sameReaderBookmarkLocation(a, b ReaderBookmark) bool {
+	return readerBookmarkLocationKey(a) == readerBookmarkLocationKey(b)
+}
+
+func readerBookmarkLocationKey(bookmark ReaderBookmark) string {
+	return strings.TrimSpace(bookmark.ChapterHref) + "\x00" + strings.TrimSpace(bookmark.Location)
 }
 
 func normalizePromptConfig(prompt PromptConfig, updatedAt time.Time) PromptConfig {
@@ -636,6 +790,17 @@ func cleanNoteID(value string) string {
 	value = strings.Trim(value, "-")
 	if len(value) > 64 {
 		value = strings.Trim(value[:64], "-")
+	}
+	return value
+}
+
+func cleanBookmarkID(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, "_", "-")
+	value = bookmarkIDCleanup.ReplaceAllString(value, "-")
+	value = strings.Trim(value, "-")
+	if len(value) > 80 {
+		value = strings.Trim(value[:80], "-")
 	}
 	return value
 }

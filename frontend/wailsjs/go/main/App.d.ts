@@ -5,6 +5,8 @@ import {main} from '../models';
 
 export function DeleteBookMetadata(arg1:string):Promise<void>;
 
+export function DeleteReaderBookmark(arg1:string,arg2:string):Promise<library.BookMetadata>;
+
 export function DeleteReaderNote(arg1:string,arg2:string):Promise<library.BookMetadata>;
 
 export function GetBook(arg1:string):Promise<library.BookMetadata>;
@@ -26,6 +28,8 @@ export function SaveBookMetadata(arg1:library.BookMetadata):Promise<library.Book
 export function SaveBookPrompt(arg1:string,arg2:library.PromptConfig):Promise<library.BookMetadata>;
 
 export function SaveReaderAppearance(arg1:string,arg2:library.ReaderAppearance):Promise<library.BookMetadata>;
+
+export function SaveReaderBookmark(arg1:string,arg2:library.ReaderBookmark):Promise<library.BookMetadata>;
 
 export function SaveReaderNote(arg1:string,arg2:library.ReaderNote):Promise<library.BookMetadata>;
 

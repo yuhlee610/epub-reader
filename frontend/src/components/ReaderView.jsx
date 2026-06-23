@@ -82,10 +82,12 @@ export function ReaderView({
   isLoading,
   onClose,
   onAppearanceChange,
+  onDeleteBookmark,
   onDeleteNote,
   onNext,
   onPageChange,
   onPrevious,
+  onSaveBookmark,
   onSaveNote,
   onSelectChapter,
   readerBook,
@@ -124,6 +126,8 @@ export function ReaderView({
   const [readerSearchTarget, setReaderSearchTarget] = useState(null);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [notesPanelRequestID, setNotesPanelRequestID] = useState(0);
+  const [bookmarksPanelRequestID, setBookmarksPanelRequestID] = useState(0);
+  const [pendingBookmarkNavigation, setPendingBookmarkNavigation] = useState(null);
   const chapterCount = readerBook?.chapters?.length ?? 0;
   const currentBook = readerBook?.book;
 
@@ -150,7 +154,7 @@ export function ReaderView({
     setDraftNoteText('');
     setGeminiError('');
     setActiveGeminiPromptID('');
-  }, [chapter?.href]);
+  }, [chapter?.href, initialPageIndex]);
 
   useEffect(() => {
     chapterIndexRef.current = chapterIndex;
@@ -220,13 +224,17 @@ export function ReaderView({
               ? stablePageMeasureCountRef.current + 1
               : 1;
           const isStable = stableMeasureCount >= 2;
+          const isSettledRegularRequest =
+            !isEndRequest &&
+            isStable &&
+            stableMeasureCount >= 5;
           const isSettledEndRequest =
             isEndRequest &&
             isStable &&
             (nextPageCount > 1 || stableMeasureCount >= 4);
 
           stablePageMeasureCountRef.current = stableMeasureCount;
-          if (isInRange || (!isEndRequest && isStable) || isSettledEndRequest) {
+          if (isInRange || isSettledRegularRequest || isSettledEndRequest) {
             requestedPageIndexRef.current = null;
             finishPagePositioning();
           }
@@ -250,6 +258,9 @@ export function ReaderView({
     timeoutIDs.push(window.setTimeout(scheduleMeasure, 50));
     timeoutIDs.push(window.setTimeout(scheduleMeasure, 150));
     timeoutIDs.push(window.setTimeout(scheduleMeasure, 300));
+    timeoutIDs.push(window.setTimeout(scheduleMeasure, 600));
+    timeoutIDs.push(window.setTimeout(scheduleMeasure, 1000));
+    timeoutIDs.push(window.setTimeout(scheduleMeasure, 1800));
 
     if (typeof ResizeObserver === 'undefined') {
       return () => {
@@ -269,7 +280,13 @@ export function ReaderView({
       timeoutIDs.forEach((timeoutID) => window.clearTimeout(timeoutID));
       observer.disconnect();
     };
-  }, [chapter?.bodyHtml, chapter?.href, isTocOpen, readerBook?.book?.appearance?.fontSize]);
+  }, [
+    chapter?.bodyHtml,
+    chapter?.href,
+    initialPageIndex,
+    isTocOpen,
+    readerBook?.book?.appearance?.fontSize,
+  ]);
 
   const progressPercent = readingProgressPercent(
     chapterIndex,
@@ -289,6 +306,20 @@ export function ReaderView({
       chapterIndex,
     });
   }, [chapter, chapterIndex, onPageChange]);
+
+  const jumpToReaderPage = useCallback((nextPageIndex) => {
+    const targetPageIndex = Math.max(0, Math.min(nextPageIndex, pageCount - 1));
+    requestedPageIndexRef.current = null;
+    setIsPageContentHidden(false);
+    setIsPagePositioning(false);
+    setPageIndex(targetPageIndex);
+    saveVisiblePage(targetPageIndex, readingProgressPercent(
+      chapterIndex,
+      chapterCount,
+      targetPageIndex,
+      pageCount,
+    ));
+  }, [chapterCount, chapterIndex, pageCount, saveVisiblePage]);
 
   useEffect(() => {
     if (!readerBook || !chapter || measuredChapterHref !== chapter.href) {
@@ -314,6 +345,39 @@ export function ReaderView({
     progressPercent,
     readerBook,
     saveVisiblePage,
+  ]);
+
+  useEffect(() => {
+    if (
+      !pendingBookmarkNavigation ||
+      !chapter ||
+      pendingBookmarkNavigation.chapterHref !== chapter.href ||
+      pendingBookmarkNavigation.chapterIndex !== chapterIndex ||
+      !isChapterMeasured
+    ) {
+      return undefined;
+    }
+
+    const requestedPageIndex = Math.max(0, pendingBookmarkNavigation.pageIndex);
+    if (requestedPageIndex <= pageCount - 1) {
+      jumpToReaderPage(requestedPageIndex);
+      setPendingBookmarkNavigation(null);
+      return undefined;
+    }
+
+    const timeoutID = window.setTimeout(() => {
+      jumpToReaderPage(requestedPageIndex);
+      setPendingBookmarkNavigation(null);
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutID);
+  }, [
+    chapter,
+    chapterIndex,
+    isChapterMeasured,
+    jumpToReaderPage,
+    pageCount,
+    pendingBookmarkNavigation,
   ]);
 
   const goPrevious = useCallback(() => {
@@ -683,6 +747,81 @@ export function ReaderView({
     return nextBook;
   }, [clearSearchTarget, onDeleteNote, readerSearchTarget?.id]);
 
+  const saveCurrentBookmark = useCallback(async (existingBookmark = null) => {
+    if (!currentBook?.id || !chapter) {
+      showStudyMessage('No open book for this bookmark.');
+      return null;
+    }
+
+    const location = readerPageLocation(pageIndex, progressPercent);
+    const bookmarkTitle = `${chapter.title || `Chapter ${chapterIndex + 1}`} - ${progressPercent}%`;
+    const nextBook = await onSaveBookmark?.({
+      id: existingBookmark?.id || bookmarkIDFromLocation(chapter.href, location),
+      title: bookmarkTitle,
+      chapterHref: chapter.href,
+      chapterIndex,
+      chapterTitle: chapter.title || `Chapter ${chapterIndex + 1}`,
+      location,
+      snippet: readerVisibleSnippet(contentRef.current, pageRef.current),
+      progressPercent,
+    });
+
+    if (nextBook) {
+      setIsTocOpen(true);
+      setBookmarksPanelRequestID((requestID) => requestID + 1);
+      showStudyMessage(existingBookmark ? 'Updated bookmark.' : 'Saved bookmark.');
+      return nextBook;
+    }
+
+    showStudyMessage('Could not save bookmark. Please try again.');
+    return null;
+  }, [
+    chapter,
+    chapterIndex,
+    currentBook?.id,
+    onSaveBookmark,
+    pageIndex,
+    progressPercent,
+    showStudyMessage,
+  ]);
+
+  const deleteReaderBookmark = useCallback(async (bookmarkID) => {
+    const nextBook = await onDeleteBookmark?.(bookmarkID);
+    if (!nextBook) {
+      showStudyMessage('Could not remove bookmark. Please try again.');
+      return null;
+    }
+
+    showStudyMessage('Removed bookmark.');
+    return nextBook;
+  }, [onDeleteBookmark, showStudyMessage]);
+
+  const selectReaderBookmark = useCallback((bookmark) => {
+    if (!bookmark) {
+      return;
+    }
+
+    const bookmarkPageIndex = pageIndexFromLocation(bookmark.location);
+    clearSearchTarget();
+
+    if (bookmark.chapterIndex !== chapterIndex) {
+      setPendingBookmarkNavigation({
+        chapterHref: bookmark.chapterHref,
+        chapterIndex: bookmark.chapterIndex,
+        pageIndex: bookmarkPageIndex,
+      });
+      onSelectChapter(bookmark.chapterIndex, bookmarkPageIndex, null, {deferProgress: true});
+      return;
+    }
+
+    jumpToReaderPage(bookmarkPageIndex);
+  }, [
+    chapterIndex,
+    clearSearchTarget,
+    jumpToReaderPage,
+    onSelectChapter,
+  ]);
+
   useEffect(() => {
     function handleKeyDown(event) {
       if (shouldIgnoreReaderShortcut(event)) {
@@ -801,6 +940,12 @@ export function ReaderView({
   const translationPrompts = studyPrompts.filter(isTranslationPrompt);
   const geminiPrompts = studyPrompts.filter((prompt) => !isTranslationPrompt(prompt));
   const readerNotes = normalizeReaderNotes(currentBook?.notes);
+  const readerBookmarks = normalizeReaderBookmarks(currentBook?.bookmarks);
+  const currentBookmarkLocation = readerPageLocation(pageIndex, progressPercent);
+  const currentBookmark = readerBookmarks.find((bookmark) => (
+    bookmark.chapterHref === chapter.href &&
+    bookmark.location === currentBookmarkLocation
+  ));
   const googleTranslateActions = translationPrompts.length > 0
     ? translationPrompts
     : [{id: 'google-translate', name: 'Translate', shortLabel: 'TR'}];
@@ -821,6 +966,9 @@ export function ReaderView({
       {isTocOpen && (
         <ReaderSidebar
           activeChapterIndex={chapterIndex}
+          bookmarks={readerBookmarks}
+          bookmarksPanelRequestID={bookmarksPanelRequestID}
+          currentBookmark={currentBookmark}
           appearance={appearance}
           book={readerBook.book}
           chapters={readerBook.chapters}
@@ -828,7 +976,10 @@ export function ReaderView({
           onClose={onClose}
           onAppearanceChange={onAppearanceChange}
           onClearSearchTarget={clearSearchTarget}
+          onDeleteBookmark={deleteReaderBookmark}
           onDeleteNote={deleteReaderNote}
+          onSaveBookmark={saveCurrentBookmark}
+          onSelectBookmark={selectReaderBookmark}
           onSelectSearchResult={selectSearchResult}
           onSelectChapter={onSelectChapter}
           onSelectNote={selectReaderNote}
@@ -1463,6 +1614,23 @@ function normalizeReaderNotes(notes) {
     .sort((a, b) => noteTimeValue(b.createdAt) - noteTimeValue(a.createdAt));
 }
 
+function normalizeReaderBookmarks(bookmarks) {
+  return (bookmarks ?? [])
+    .map((bookmark) => ({
+      id: String(bookmark?.id || '').trim(),
+      title: String(bookmark?.title || '').trim(),
+      chapterHref: String(bookmark?.chapterHref || '').trim(),
+      chapterIndex: Number.isInteger(bookmark?.chapterIndex) ? bookmark.chapterIndex : 0,
+      chapterTitle: String(bookmark?.chapterTitle || '').trim(),
+      location: String(bookmark?.location || '').trim(),
+      snippet: cleanSelectedText(bookmark?.snippet || ''),
+      progressPercent: clampPercent(bookmark?.progressPercent),
+      createdAt: bookmark?.createdAt,
+    }))
+    .filter((bookmark) => bookmark.id && bookmark.chapterHref && bookmark.location)
+    .sort((a, b) => noteTimeValue(b.createdAt) - noteTimeValue(a.createdAt));
+}
+
 function noteTimeValue(value) {
   const time = new Date(value || 0).getTime();
   return Number.isFinite(time) ? time : 0;
@@ -1479,6 +1647,23 @@ function formatNoteDate(value) {
     month: 'short',
     year: 'numeric',
   });
+}
+
+function formatBookmarkProgress(bookmark) {
+  if (Number.isFinite(bookmark?.progressPercent) && bookmark.progressPercent > 0) {
+    return `${bookmark.progressPercent}%`;
+  }
+
+  return 'Saved location';
+}
+
+function clampPercent(value) {
+  const percent = Number(value);
+  if (!Number.isFinite(percent)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round(percent)));
 }
 
 function selectedTextPreview(value) {
@@ -1604,6 +1789,54 @@ function pageIndexFromLocation(location) {
   return match ? Number(match[1]) : 0;
 }
 
+function bookmarkIDFromLocation(chapterHref, location) {
+  const rawID = `bookmark-${chapterHref}-${location}`;
+  const cleaned = rawID
+    .toLowerCase()
+    .replace(/_/g, '-')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return cleaned.slice(0, 80).replace(/-+$/g, '') || `bookmark-${Date.now()}`;
+}
+
+function readerVisibleSnippet(content, page) {
+  if (!content) {
+    return '';
+  }
+  if (!page || typeof document.createRange !== 'function') {
+    return cleanSelectedText(content.textContent || '').slice(0, 180);
+  }
+
+  const pageRect = page.getBoundingClientRect();
+  const parts = [];
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const text = cleanSelectedText(node.textContent || '');
+    if (!text) {
+      continue;
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const isVisible = Array.from(range.getClientRects()).some((rect) => (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > pageRect.top &&
+      rect.top < pageRect.bottom
+    ));
+    range.detach();
+    if (isVisible) {
+      parts.push(text);
+    }
+    if (parts.join(' ').length >= 220) {
+      break;
+    }
+  }
+
+  return cleanSelectedText(parts.join(' ')).slice(0, 180);
+}
+
 function clampRatio(value) {
   return Math.min(1, Math.max(0, value));
 }
@@ -1650,13 +1883,19 @@ function ReaderSidebar({
   activeChapterIndex,
   appearance,
   book,
+  bookmarks,
+  bookmarksPanelRequestID,
   chapters,
+  currentBookmark,
   notes,
   notesPanelRequestID,
   onClose,
   onAppearanceChange,
   onClearSearchTarget,
+  onDeleteBookmark,
   onDeleteNote,
+  onSaveBookmark,
+  onSelectBookmark,
   onSelectSearchResult,
   onSelectChapter,
   onSelectNote,
@@ -1674,6 +1913,15 @@ function ReaderSidebar({
       setActiveFooterTab('notes');
     }
   }, [notesPanelRequestID, onClearSearchTarget]);
+
+  useEffect(() => {
+    if (bookmarksPanelRequestID > 0) {
+      setIsSearchOpen(false);
+      setIsAppearanceOpen(false);
+      onClearSearchTarget?.();
+      setActiveFooterTab('bookmarks');
+    }
+  }, [bookmarksPanelRequestID, onClearSearchTarget]);
 
   function closeSearch() {
     setIsSearchOpen(false);
@@ -1839,9 +2087,12 @@ function ReaderSidebar({
           onSelectNote={onSelectNote}
         />
       ) : activeFooterTab === 'bookmarks' ? (
-        <ReaderPanelEmpty
-          title="No bookmarks yet"
-          message="Bookmarks will appear here after you save reading locations."
+        <ReaderBookmarksPanel
+          bookmarks={bookmarks}
+          currentBookmark={currentBookmark}
+          onDeleteBookmark={onDeleteBookmark}
+          onSaveBookmark={onSaveBookmark}
+          onSelectBookmark={onSelectBookmark}
         />
       ) : (
         <ol className="reader-toc">
@@ -1891,6 +2142,91 @@ function ReaderSidebar({
         </button>
       </div>
     </aside>
+  );
+}
+
+function ReaderBookmarksPanel({
+  bookmarks,
+  currentBookmark,
+  onDeleteBookmark,
+  onSaveBookmark,
+  onSelectBookmark,
+}) {
+  const hasBookmarks = bookmarks && bookmarks.length > 0;
+
+  return (
+    <section className="reader-bookmarks-panel" aria-label="Bookmarks">
+      <div className="reader-bookmark-actions">
+        <button
+          className={
+            currentBookmark
+              ? 'reader-bookmark-action is-saved'
+              : 'reader-bookmark-action'
+          }
+          onClick={() => (
+            currentBookmark
+              ? onDeleteBookmark?.(currentBookmark.id)
+              : onSaveBookmark?.(currentBookmark)
+          )}
+          type="button"
+        >
+          <Bookmark aria-hidden="true" size={15} strokeWidth={2} />
+          <span>{currentBookmark ? 'Remove bookmark' : 'Add bookmark'}</span>
+        </button>
+      </div>
+
+      {hasBookmarks ? (
+        <>
+          <div className="reader-bookmarks-count">
+            {bookmarks.length} {bookmarks.length === 1 ? 'bookmark' : 'bookmarks'}
+          </div>
+          <ol className="reader-bookmarks-list">
+            {bookmarks.map((bookmark) => (
+              <li key={bookmark.id}>
+                <div className="reader-bookmark-item">
+                  <button
+                    className={
+                      currentBookmark?.id === bookmark.id
+                        ? 'reader-bookmark-jump is-active'
+                        : 'reader-bookmark-jump'
+                    }
+                    onClick={() => onSelectBookmark?.(bookmark)}
+                    type="button"
+                  >
+                    <span className="reader-bookmark-body">
+                      <strong>
+                        {bookmark.title || bookmark.chapterTitle || `Chapter ${bookmark.chapterIndex + 1}`}
+                      </strong>
+                      <span>{bookmark.chapterTitle || `Chapter ${bookmark.chapterIndex + 1}`}</span>
+                      {bookmark.snippet && (
+                        <small className="reader-bookmark-snippet">{bookmark.snippet}</small>
+                      )}
+                      <small>
+                        {formatBookmarkProgress(bookmark)} - {formatNoteDate(bookmark.createdAt)}
+                      </small>
+                    </span>
+                  </button>
+                  <button
+                    aria-label="Delete bookmark"
+                    className="reader-bookmark-delete"
+                    onClick={() => onDeleteBookmark?.(bookmark.id)}
+                    title="Delete bookmark"
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={14} strokeWidth={2} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : (
+        <ReaderPanelEmpty
+          title="No bookmarks yet"
+          message="Press Add bookmark to save the current reading location."
+        />
+      )}
+    </section>
   );
 }
 
